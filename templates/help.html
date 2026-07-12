@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How to use — Photo Triage</title>
+<style>
+  :root {
+    --bg: #1a1816;
+    --panel: #242220;
+    --line: #38342f;
+    --text: #e8e3da;
+    --muted: #948d80;
+    --amber: #d98f2b;
+    --amber-dim: #6b4f1f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0;
+    padding: 2.5rem 1.5rem;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 1rem;
+    margin-bottom: 1.75rem;
+  }
+  h1 { font-size: 1.1rem; font-weight: 600; margin: 0; text-transform: uppercase; letter-spacing: 0.02em; }
+  h1 span { color: var(--amber); }
+  a.back { color: var(--muted); font-size: 0.8rem; text-decoration: none; }
+  a.back:hover { color: var(--text); }
+
+  .step {
+    display: flex;
+    gap: 0.9rem;
+    margin-bottom: 1.5rem;
+  }
+  .step-num {
+    flex-shrink: 0;
+    width: 1.8rem;
+    height: 1.8rem;
+    border: 1px solid var(--amber-dim);
+    color: var(--amber);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .step-body h3 {
+    margin: 0 0 0.3rem 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  .step-body p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.88rem;
+  }
+  .step-body .status-tag {
+    display: inline-block;
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--amber);
+    border: 1px solid var(--amber-dim);
+    border-radius: 3px;
+    padding: 0.1rem 0.4rem;
+    margin-top: 0.4rem;
+  }
+
+  .note {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    margin-top: 2rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .note strong { color: var(--text); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>How to <span>use this</span></h1>
+      <a class="back" href="{{ url_for('browse') }}">&larr; back to folders</a>
+    </header>
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h3>Navigate to a shoot folder</h3>
+        <p>Click through folders until you reach one that directly contains RAW files. It'll show an amber-bordered card with a status and an action button.</p>
+        <span class="status-tag">not started</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h3>Extract previews</h3>
+        <p>Confirm the RAW extension matches this shoot's camera (defaults to CR2), then click Extract. Pulls the embedded JPEG preview out of each RAW file — fast, no RAW processing happens.</p>
+        <span class="status-tag">extracted</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h3>Run triage</h3>
+        <p>Sends the extracted previews to Claude in small batches to flag technical rejects, assign star ratings, and generate keywords.</p>
+        <span class="status-tag">triaged - needs review</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h3>Review results</h3>
+        <p>Click through to the editable table. Check ratings and keywords against the actual images before submitting — this is the checkpoint that catches anything Claude got wrong before it's written anywhere permanent.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <h3>Write to XMP</h3>
+        <p>Writes your (possibly edited) ratings and keywords into XMP sidecar files next to each RAW.</p>
+        <span class="status-tag">written</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">6</div>
+      <div class="step-body">
+        <h3>Import into Lightroom</h3>
+        <p>Back on your Mac: select the folder in Lightroom, then Metadata &rarr; Read Metadata from File. This step can't be automated from here — Lightroom only runs on the Mac.</p>
+      </div>
+    </div>
+
+    <div class="note">
+      <strong>Before trusting a big batch:</strong> spot-check one file's XMP output first. On the Pi:
+      <code>exiftool -G1 -a -s path/to/file.xmp</code> — confirm Rating, Subject, and Keywords all show real values.
+    </div>
+  </div>
+</body>
+</html>

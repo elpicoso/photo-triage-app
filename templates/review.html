@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Review — {{ folder }}</title>
+<style>
+  :root {
+    --bg: #1a1816;
+    --panel: #242220;
+    --line: #38342f;
+    --text: #e8e3da;
+    --muted: #948d80;
+    --amber: #d98f2b;
+    --amber-dim: #6b4f1f;
+    --red: #b8493a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0;
+    padding: 2rem 1.5rem;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 1rem;
+    margin-bottom: 1.25rem;
+  }
+  h1 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0;
+  }
+  h1 span {
+    font-family: "SF Mono", Consolas, monospace;
+    color: var(--amber);
+    font-weight: 400;
+    font-size: 0.9rem;
+  }
+  a.back { color: var(--muted); font-size: 0.8rem; text-decoration: none; }
+  a.back:hover { color: var(--text); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th {
+    text-align: left;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--line);
+  }
+  td {
+    padding: 0.4rem 0.6rem;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+  }
+  tr.rejected { opacity: 0.55; }
+  .filename { font-family: "SF Mono", Consolas, monospace; font-size: 0.78rem; color: var(--muted); }
+  input[type=text], select {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.8rem;
+    font-family: inherit;
+  }
+  input[name="rating"] { width: 3rem; }
+  input[name="keywords"] { width: 100%; }
+  .submit-row { margin-top: 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+  button {
+    background: var(--amber);
+    border: none;
+    color: #1a1816;
+    padding: 0.6rem 1.4rem;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  button:hover { background: #eba447; }
+  .note { color: var(--muted); font-size: 0.78rem; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Review <span>{{ folder }}</span></h1>
+      <a class="back" href="{{ url_for('browse', subpath=folder.rsplit('/', 1)[0] if '/' in folder else '') }}">&larr; back</a>
+    </header>
+
+    <form action="{{ url_for('write', folder=folder) }}" method="post">
+      <input type="hidden" name="raw_ext" value="CR2">
+      <table>
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Reject</th>
+            <th>Rating</th>
+            <th>Keywords</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr class="{{ 'rejected' if row.reject == 'yes' else '' }}">
+            <td class="filename">
+              {{ row.filename }}
+              <input type="hidden" name="filename" value="{{ row.filename }}">
+            </td>
+            <td>
+              <select name="reject">
+                <option value="no" {{ 'selected' if row.reject == 'no' }}>No</option>
+                <option value="yes" {{ 'selected' if row.reject == 'yes' }}>Yes</option>
+              </select>
+            </td>
+            <td>
+              <input type="text" name="rating" value="{{ row.rating }}">
+            </td>
+            <td>
+              <input type="text" name="keywords" value="{{ row.keywords }}">
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="submit-row">
+        <span class="note">Edit any row before committing — this writes directly to XMP sidecars.</span>
+        <button type="submit">Write to XMP</button>
+      </div>
+    </form>
+  </div>
+</body>
+</html>

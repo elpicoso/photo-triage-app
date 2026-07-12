@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Photo Triage</title>
+<style>
+  :root {
+    --bg: #1a1816;
+    --panel: #242220;
+    --line: #38342f;
+    --text: #e8e3da;
+    --muted: #948d80;
+    --amber: #d98f2b;
+    --amber-dim: #6b4f1f;
+    --red: #b8493a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0;
+    padding: 2.5rem 1.5rem;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin: 0 0 1rem 0;
+    text-transform: uppercase;
+  }
+  h1 span { color: var(--amber); }
+
+  .breadcrumbs {
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .breadcrumbs a { color: var(--muted); text-decoration: none; }
+  .breadcrumbs a:hover { color: var(--amber); }
+  .breadcrumbs .sep { margin: 0 0.35rem; color: var(--line); }
+  .breadcrumbs .current { color: var(--text); }
+
+  .shoot-card {
+    background: var(--panel);
+    border: 1px solid var(--amber-dim);
+    border-radius: 6px;
+    padding: 1.1rem 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  .shoot-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+  .shoot-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--amber); }
+  .status {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.2rem 0.55rem;
+    border-radius: 3px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .status.written { color: var(--amber); border-color: var(--amber-dim); }
+  .status.needs-review { color: var(--red); border-color: var(--red); }
+  .actions { display: flex; gap: 0.5rem; margin-top: 0.9rem; flex-wrap: wrap; align-items: center; }
+  form { display: inline; }
+  input[type=text] {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 0.4rem 0.6rem;
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 0.8rem;
+    width: 4.5rem;
+  }
+  button, a.btn {
+    background: transparent;
+    border: 1px solid var(--amber-dim);
+    color: var(--amber);
+    padding: 0.4rem 0.85rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+  }
+  button:hover, a.btn:hover { background: rgba(217, 143, 43, 0.1); }
+  .ready-note { color: var(--muted); font-size: 0.8rem; }
+
+  .folder-list { display: flex; flex-direction: column; gap: 0.5rem; }
+  .folder-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    text-decoration: none;
+    color: var(--text);
+  }
+  .folder-row:hover { border-color: var(--amber-dim); }
+  .folder-icon { color: var(--muted); font-size: 0.9rem; }
+  .folder-name { font-family: "SF Mono", Consolas, monospace; font-size: 0.9rem; }
+  .empty { color: var(--muted); text-align: center; padding: 2rem 0; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <h1>Photo <span>Triage</span></h1>
+      <a href="{{ url_for('help_page') }}" style="color: var(--muted); font-size: 0.8rem; text-decoration: none;">how to use this &rarr;</a>
+    </div>
+
+    <div class="breadcrumbs">
+      <a href="{{ url_for('browse') }}">/mnt/photos</a>
+      {% for crumb in breadcrumbs %}
+        <span class="sep">/</span>
+        {% if not loop.last %}
+          <a href="{{ url_for('browse', subpath=crumb.path) }}">{{ crumb.name }}</a>
+        {% else %}
+          <span class="current">{{ crumb.name }}</span>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    {% if is_shoot %}
+      <div class="shoot-card">
+        <div class="shoot-top">
+          <span class="shoot-label">This folder contains RAW files</span>
+          <span class="status {{ 'written' if status == 'written' else ('needs-review' if 'review' in status else '') }}">
+            {{ status }}
+          </span>
+        </div>
+        <div class="actions">
+          {% if status == 'not started' %}
+            <form action="{{ url_for('extract', folder=subpath) }}" method="post">
+              <input type="text" name="raw_ext" value="CR2" title="RAW extension">
+              <button type="submit">Extract previews</button>
+            </form>
+          {% elif status == 'extracted' %}
+            <form action="{{ url_for('triage', folder=subpath) }}" method="post">
+              <button type="submit">Run triage</button>
+            </form>
+          {% elif 'review' in status %}
+            <a class="btn" href="{{ url_for('review', folder=subpath) }}">Review results</a>
+          {% elif status == 'written' %}
+            <span class="ready-note">Ready for Lightroom import</span>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="folder-list">
+      {% for entry in subdirs %}
+        <a class="folder-row" href="{{ url_for('browse', subpath=entry.path) }}">
+          <span class="folder-icon">&#128193;</span>
+          <span class="folder-name">{{ entry.name }}</span>
+        </a>
+      {% endfor %}
+    </div>
+
+    {% if not subdirs and not is_shoot %}
+      <div class="empty">Empty folder.</div>
+    {% endif %}
+  </div>
+</body>
+</html>
