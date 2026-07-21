@@ -93,6 +93,22 @@ or got removed) — do the manual steps above until/unless it's recreated.
   — if it happens, treat it as compromised and rotate it immediately via
   the Anthropic Console (API Keys → disable old key → Create Key).
 
+## Lightroom import gotcha
+
+After running `/write` and confirming XMP sidecars have the expected data
+(e.g. `exiftool -XMP-dc:Subject -IPTC:Keywords file.xmp`), **"Synchronize
+Folder" in Lightroom is NOT enough** to pull in the new metadata for photos
+already in the catalog — it only detects added/removed files, not changed
+sidecars. To actually load the new rating/keywords:
+
+- Select the affected photos in the Library grid
+- Right-click → **Metadata → Read Metadata from File**
+- Confirm the overwrite warning
+
+If keywords/ratings look correct in the XMP file via exiftool but don't
+show up in Lightroom after a sync, this is almost always the cause — check
+here before assuming the write step failed.
+
 ## Backlog
 
 - **Bug:** `raw_ext` should be threaded through from the extract step
