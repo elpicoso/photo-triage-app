@@ -35,24 +35,33 @@ def extract_previews(raw_dir, preview_dir, raw_ext):
     return len(raw_files)
 
 
-def write_sidecar(raw_path, rating, reject, keywords):
+def write_sidecar(raw_path, rating=None, reject=False, keywords=None):
     """Writes rating/keywords into an XMP sidecar. Uses fully-qualified tag
     names (XMP-xmp:Rating, XMP-dc:Subject, IPTC:Keywords) rather than the
     generic -Rating/-Keywords shortcuts, which can land in unexpected
-    namespaces (e.g. pdf:Keywords) on a freshly created sidecar."""
+    namespaces (e.g. pdf:Keywords) on a freshly created sidecar.
+
+    rating/keywords are optional - pass None (or leave unset) to skip
+    writing that field entirely, e.g. when the user only selected "rating"
+    at triage time and left "keywords" unchecked.
+    """
     xmp_path = os.path.splitext(raw_path)[0] + ".xmp"
 
     if not os.path.exists(xmp_path):
         subprocess.run(["exiftool", "-o", xmp_path, raw_path], check=True)
 
+    tags = []
     if reject:
         tags = ["-XMP-xmp:Rating=-1", "-XMP-xmp:Label=Red"]
     else:
-        tags = [
-            f"-XMP-xmp:Rating={rating}",
-            f"-XMP-dc:Subject={keywords}",
-            f"-IPTC:Keywords={keywords}",
-        ]
+        if rating is not None and rating != "":
+            tags.append(f"-XMP-xmp:Rating={rating}")
+        if keywords is not None and keywords != "":
+            tags.append(f"-XMP-dc:Subject={keywords}")
+            tags.append(f"-IPTC:Keywords={keywords}")
+
+    if not tags:
+        return
 
     subprocess.run(
         ["exiftool", "-overwrite_original"] + tags + [xmp_path], check=True

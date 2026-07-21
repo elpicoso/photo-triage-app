@@ -79,6 +79,15 @@
     font-size: 0.8rem;
     width: 4.5rem;
   }
+  .op-checks {
+    display: flex;
+    gap: 0.9rem;
+    align-items: center;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-right: 0.5rem;
+  }
+  .op-checks label { display: flex; align-items: center; gap: 0.3rem; cursor: pointer; }
   button, a.btn {
     background: transparent;
     border: 1px solid var(--amber-dim);
@@ -146,6 +155,11 @@
             </form>
           {% elif status == 'extracted' %}
             <form action="{{ url_for('triage', folder=subpath) }}" method="post">
+              <span class="op-checks">
+                <label><input type="checkbox" name="ops" value="reject" checked> Flag rejects</label>
+                <label><input type="checkbox" name="ops" value="rating" checked> Rate</label>
+                <label><input type="checkbox" name="ops" value="keywords" checked> Keyword</label>
+              </span>
               <button type="submit">Run triage</button>
             </form>
           {% elif 'review' in status %}

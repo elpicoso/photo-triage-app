@@ -45,6 +45,15 @@
   }
   a.back { color: var(--muted); font-size: 0.8rem; text-decoration: none; }
   a.back:hover { color: var(--text); }
+  .write-ops {
+    display: flex;
+    gap: 1.1rem;
+    align-items: center;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+  .write-ops label { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; }
   table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
   th {
     text-align: left;
@@ -97,6 +106,13 @@
 
     <form action="{{ url_for('write', folder=folder) }}" method="post">
       <input type="hidden" name="raw_ext" value="CR2">
+
+      <div class="write-ops">
+        <span>Write to XMP:</span>
+        <label><input type="checkbox" name="ops" value="rating" {{ 'checked' if ops.rating }}> Rating</label>
+        <label><input type="checkbox" name="ops" value="keywords" {{ 'checked' if ops.keywords }}> Keywords</label>
+      </div>
+
       <table>
         <thead>
           <tr>
@@ -131,7 +147,7 @@
       </table>
 
       <div class="submit-row">
-        <span class="note">Edit any row before committing — this writes directly to XMP sidecars.</span>
+        <span class="note">Edit any row before committing — this writes directly to XMP sidecars. Unchecked boxes above are skipped entirely, even if a row has a value.</span>
         <button type="submit">Write to XMP</button>
       </div>
     </form>

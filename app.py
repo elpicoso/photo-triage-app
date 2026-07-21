@@ -1,4 +1,5 @@
 import csv
+import json
 import os
 
 from flask import Flask, render_template, request, redirect, url_for, abort
@@ -25,6 +26,10 @@ def preview_dir(folder):
 
 def csv_path(folder):
     return os.path.join(preview_dir(folder), "triage_results.csv")
+
+
+def ops_path(folder):
+    return os.path.join(preview_dir(folder), ".ops.json")
 
 
 def written_marker(folder):
@@ -107,13 +112,31 @@ def extract(folder):
 
 @app.route("/triage/<path:folder>", methods=["POST"])
 def triage(folder):
-    results = triage_folder(preview_dir(folder))
+    selected_ops = request.form.getlist("ops")
+    do_reject = "reject" in selected_ops
+    do_rating = "rating" in selected_ops
+    do_keywords = "keywords" in selected_ops
+
+    results = triage_folder(
+        preview_dir(folder),
+        do_reject=do_reject,
+        do_rating=do_rating,
+        do_keywords=do_keywords,
+    )
     with open(csv_path(folder), "w", newline="") as f:
         writer = csv.DictWriter(
             f, fieldnames=["filename", "reject", "rating", "keywords"]
         )
         writer.writeheader()
         writer.writerows(results)
+
+    # Remember what was selected so the review step can default its own
+    # write-time checkboxes to match (with the option to override there).
+    with open(ops_path(folder), "w") as f:
+        json.dump(
+            {"reject": do_reject, "rating": do_rating, "keywords": do_keywords}, f
+        )
+
     return redirect(url_for("review", folder=folder))
 
 
@@ -121,13 +144,23 @@ def triage(folder):
 def review(folder):
     with open(csv_path(folder), newline="") as f:
         rows = list(csv.DictReader(f))
-    return render_template("review.html", folder=folder, rows=rows)
+
+    ops = {"reject": True, "rating": True, "keywords": True}
+    if os.path.exists(ops_path(folder)):
+        with open(ops_path(folder)) as f:
+            ops.update(json.load(f))
+
+    return render_template("review.html", folder=folder, rows=rows, ops=ops)
 
 
 @app.route("/write/<path:folder>", methods=["POST"])
 def write(folder):
     raw_dir = safe_path(folder)
     raw_ext = request.form.get("raw_ext", "CR2")
+
+    write_ops = request.form.getlist("ops")
+    do_rating = "rating" in write_ops
+    do_keywords = "keywords" in write_ops
 
     filenames = request.form.getlist("filename")
     rejects = request.form.getlist("reject")
@@ -142,9 +175,9 @@ def write(folder):
             continue
         write_sidecar(
             raw_path,
-            rating=rating,
+            rating=rating if do_rating else None,
             reject=reject.strip().lower() == "yes",
-            keywords=keywords,
+            keywords=keywords if do_keywords else None,
         )
 
     open(written_marker(folder), "w").close()
