@@ -69,16 +69,6 @@
   .status.needs-review { color: var(--red); border-color: var(--red); }
   .actions { display: flex; gap: 0.5rem; margin-top: 0.9rem; flex-wrap: wrap; align-items: center; }
   form { display: inline; }
-  input[type=text] {
-    background: var(--bg);
-    border: 1px solid var(--line);
-    color: var(--text);
-    border-radius: 4px;
-    padding: 0.4rem 0.6rem;
-    font-family: "SF Mono", Consolas, monospace;
-    font-size: 0.8rem;
-    width: 4.5rem;
-  }
   .op-checks {
     display: flex;
     gap: 0.9rem;
@@ -150,7 +140,6 @@
         <div class="actions">
           {% if status == 'not started' %}
             <form action="{{ url_for('extract', folder=subpath) }}" method="post">
-              <input type="text" name="raw_ext" value="CR2" title="RAW extension">
               <button type="submit">Extract previews</button>
             </form>
           {% elif status == 'extracted' %}

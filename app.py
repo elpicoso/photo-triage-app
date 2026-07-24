@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+from collections import Counter
 
 from flask import Flask, render_template, request, redirect, url_for, abort
 
@@ -46,15 +47,27 @@ def get_status(folder):
     return "not started"
 
 
+def detect_raw_ext(path):
+    """Look at what's actually on disk rather than trusting a hardcoded
+    default - a folder full of .CR3 files with a form defaulting to "CR2"
+    causes /write to silently skip every row, since raw_path then never
+    matches a real file. Picks the most common RAW extension present."""
+    try:
+        counts = Counter(
+            f.rsplit(".", 1)[1].upper()
+            for f in os.listdir(path)
+            if "." in f and f.rsplit(".", 1)[1].lower() in RAW_EXTENSIONS
+        )
+    except (FileNotFoundError, NotADirectoryError, PermissionError):
+        return None
+    if not counts:
+        return None
+    return counts.most_common(1)[0][0]
+
+
 def is_shoot_folder(path):
     """True if this folder directly contains RAW files."""
-    try:
-        for f in os.listdir(path):
-            if "." in f and f.rsplit(".", 1)[1].lower() in RAW_EXTENSIONS:
-                return True
-    except (FileNotFoundError, NotADirectoryError, PermissionError):
-        pass
-    return False
+    return detect_raw_ext(path) is not None
 
 
 @app.route("/")
@@ -105,7 +118,9 @@ def help_page():
 @app.route("/extract/<path:folder>", methods=["POST"])
 def extract(folder):
     raw_dir = safe_path(folder)
-    raw_ext = request.form.get("raw_ext", "CR2")
+    raw_ext = detect_raw_ext(raw_dir)
+    if raw_ext is None:
+        abort(400, "No RAW files found in this folder")
     extract_previews(raw_dir, preview_dir(folder), raw_ext)
     return redirect(url_for("browse", subpath=folder))
 
@@ -156,7 +171,9 @@ def review(folder):
 @app.route("/write/<path:folder>", methods=["POST"])
 def write(folder):
     raw_dir = safe_path(folder)
-    raw_ext = request.form.get("raw_ext", "CR2")
+    raw_ext = detect_raw_ext(raw_dir)
+    if raw_ext is None:
+        abort(400, "No RAW files found in this folder")
 
     write_ops = request.form.getlist("ops")
     do_rating = "rating" in write_ops
