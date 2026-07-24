@@ -118,6 +118,31 @@ def help_page():
     return render_template("help.html")
 
 
+@app.route("/settings/browse")
+def settings_browse():
+    """Read-only directory listing for the raw_root folder picker. Deliberately
+    not scoped by safe_path() - that helper resolves paths under the
+    already-configured raw_root, but this endpoint exists to let you pick a
+    new raw_root in the first place."""
+    path = os.path.normpath(request.args.get("path") or "/")
+    if not os.path.isdir(path):
+        path = "/"
+    try:
+        entries = sorted(
+            f
+            for f in os.listdir(path)
+            if os.path.isdir(os.path.join(path, f)) and not f.startswith(".")
+        )
+    except PermissionError:
+        entries = []
+    parent = os.path.dirname(path) if path != os.path.dirname(path) else None
+    return {
+        "path": path,
+        "parent": parent,
+        "entries": [{"name": e, "path": os.path.join(path, e)} for e in entries],
+    }
+
+
 @app.route("/settings", methods=["GET", "POST"])
 def settings_page():
     if request.method == "POST":

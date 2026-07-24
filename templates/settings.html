@@ -101,6 +101,69 @@
     color: var(--muted);
   }
   .note strong { color: var(--text); }
+
+  .field-with-button { display: flex; gap: 0.5rem; }
+  .field-with-button input { flex: 1; }
+  button.browse-btn {
+    background: transparent;
+    border: 1px solid var(--amber-dim);
+    color: var(--amber);
+    padding: 0.5rem 0.9rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 400;
+    cursor: pointer;
+    margin-top: 0;
+    white-space: nowrap;
+  }
+  button.browse-btn:hover { background: rgba(217, 143, 43, 0.1); }
+
+  .browser-panel {
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    margin-top: 0.6rem;
+    overflow: hidden;
+  }
+  .browser-panel.open { display: block; }
+  .browser-crumbs {
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--line);
+    word-break: break-all;
+  }
+  .browser-list {
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .browser-row {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--line);
+    color: var(--text);
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 0.82rem;
+    padding: 0.45rem 0.8rem;
+    cursor: pointer;
+    margin-top: 0;
+  }
+  .browser-row:last-child { border-bottom: none; }
+  .browser-row:hover { background: rgba(217, 143, 43, 0.08); }
+  .browser-row.parent { color: var(--muted); }
+  .browser-empty { padding: 0.6rem 0.8rem; font-size: 0.8rem; color: var(--muted); }
+  .browser-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.6rem 0.8rem;
+    border-top: 1px solid var(--line);
+  }
+  .browser-footer button { margin-top: 0; padding: 0.4rem 0.8rem; font-size: 0.8rem; }
 </style>
 </head>
 <body>
@@ -120,8 +183,19 @@
     <form method="post">
       <div class="field">
         <label for="raw_root">RAW root</label>
-        <input type="text" id="raw_root" name="raw_root" value="{{ values.raw_root }}">
+        <div class="field-with-button">
+          <input type="text" id="raw_root" name="raw_root" value="{{ values.raw_root }}">
+          <button type="button" class="browse-btn" onclick="openBrowser()">Browse&hellip;</button>
+        </div>
         <span class="hint">Top of the browsable photo tree (the SMB mount point on the Pi, e.g. /mnt/photos).</span>
+
+        <div class="browser-panel" id="browser-panel">
+          <div class="browser-crumbs" id="browser-crumbs"></div>
+          <div class="browser-list" id="browser-list"></div>
+          <div class="browser-footer">
+            <button type="button" onclick="selectCurrentFolder()">Use this folder</button>
+          </div>
+        </div>
       </div>
 
       <div class="field">
@@ -138,14 +212,14 @@
 
       <div class="row">
         <div class="field">
-          <label for="batch_size">Batch size</label>
+          <label for="batch_size">Batch size &mdash; max 100/request</label>
           <input type="number" id="batch_size" name="batch_size" min="1" value="{{ values.batch_size }}">
-          <span class="hint">Images sent per API call.</span>
+          <span class="hint">Images sent per API call. Anthropic caps requests at 100 images for 200k-context models (the Haiku default) or 600 for 1M-context models (Opus, Sonnet 5, Fable 5) &mdash; but the 32MB total request-size limit is usually the real ceiling first, which is why previews are downscaled (see Max preview dimension). Batches above 20 images also require each image to stay under 2000px on its long edge.</span>
         </div>
         <div class="field">
-          <label for="max_preview_dimension">Max preview dimension</label>
+          <label for="max_preview_dimension">Max preview dimension &mdash; max 8000px</label>
           <input type="number" id="max_preview_dimension" name="max_preview_dimension" min="1" value="{{ values.max_preview_dimension }}">
-          <span class="hint">Long edge, in pixels, previews are downscaled to before sending.</span>
+          <span class="hint">Long edge, in pixels, previews are downscaled to before sending. The API hard-rejects any image over 8000px, but Claude itself only uses up to 1568px (standard models) or 2576px (Claude 4.7+ high-resolution tier) &mdash; anything larger than your model's tier is wasted bandwidth, not added fidelity.</span>
         </div>
       </div>
 
@@ -157,5 +231,59 @@
       <code>Environment=</code> line, not in this settings file, so it's never displayed or edited over the network.
     </div>
   </div>
+
+  <script>
+    let browserCurrentPath = null;
+
+    function openBrowser() {
+      const panel = document.getElementById('browser-panel');
+      const startPath = document.getElementById('raw_root').value || '/';
+      panel.classList.add('open');
+      loadBrowserDir(startPath);
+    }
+
+    async function loadBrowserDir(path) {
+      const res = await fetch('{{ url_for("settings_browse") }}?path=' + encodeURIComponent(path));
+      const data = await res.json();
+      browserCurrentPath = data.path;
+
+      document.getElementById('browser-crumbs').textContent = data.path;
+
+      const list = document.getElementById('browser-list');
+      list.innerHTML = '';
+
+      if (data.parent !== null) {
+        const up = document.createElement('button');
+        up.type = 'button';
+        up.className = 'browser-row parent';
+        up.textContent = '.. (up)';
+        up.onclick = () => loadBrowserDir(data.parent);
+        list.appendChild(up);
+      }
+
+      if (data.entries.length === 0 && data.parent === null) {
+        const empty = document.createElement('div');
+        empty.className = 'browser-empty';
+        empty.textContent = 'No subfolders here.';
+        list.appendChild(empty);
+      }
+
+      for (const entry of data.entries) {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'browser-row';
+        row.textContent = entry.name;
+        row.onclick = () => loadBrowserDir(entry.path);
+        list.appendChild(row);
+      }
+    }
+
+    function selectCurrentFolder() {
+      if (browserCurrentPath) {
+        document.getElementById('raw_root').value = browserCurrentPath;
+      }
+      document.getElementById('browser-panel').classList.remove('open');
+    }
+  </script>
 </body>
 </html>
