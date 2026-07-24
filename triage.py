@@ -1,10 +1,12 @@
 import base64
+import io
 import json
 import os
 
 import anthropic
+from PIL import Image
 
-from config import TRIAGE_MODEL, BATCH_SIZE
+from config import TRIAGE_MODEL, BATCH_SIZE, MAX_PREVIEW_DIMENSION
 
 client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from environment
 
@@ -48,8 +50,16 @@ Filenames in order shown:
 
 
 def encode_image(path):
-    with open(path, "rb") as f:
-        return base64.standard_b64encode(f.read()).decode("utf-8")
+    """Downscale to MAX_PREVIEW_DIMENSION before sending to the API. Claude
+    downsizes large images internally anyway, and some cameras embed
+    full-resolution previews (5-10MB+ each) that otherwise blow past the
+    API's request size limit once a batch is assembled."""
+    with Image.open(path) as img:
+        img = img.convert("RGB")
+        img.thumbnail((MAX_PREVIEW_DIMENSION, MAX_PREVIEW_DIMENSION), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        return base64.standard_b64encode(buf.getvalue()).decode("utf-8")
 
 
 def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True):
