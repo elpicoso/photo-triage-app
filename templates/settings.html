@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings — Photo Triage</title>
+<style>
+  :root {
+    --bg: #1a1816;
+    --panel: #242220;
+    --line: #38342f;
+    --text: #e8e3da;
+    --muted: #948d80;
+    --amber: #d98f2b;
+    --amber-dim: #6b4f1f;
+    --red: #b8493a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0;
+    padding: 2.5rem 1.5rem;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  h1 { font-size: 1.1rem; font-weight: 600; margin: 0; text-transform: uppercase; letter-spacing: 0.02em; }
+  h1 span { color: var(--amber); }
+  a.back { color: var(--muted); font-size: 0.8rem; text-decoration: none; }
+  a.back:hover { color: var(--text); }
+
+  .banner {
+    border-radius: 6px;
+    padding: 0.7rem 1rem;
+    font-size: 0.85rem;
+    margin-bottom: 1.25rem;
+  }
+  .banner.saved { background: rgba(217, 143, 43, 0.1); border: 1px solid var(--amber-dim); color: var(--amber); }
+  .banner.error { background: rgba(184, 73, 58, 0.1); border: 1px solid var(--red); color: var(--red); }
+
+  .field { margin-bottom: 1.1rem; }
+  .field label {
+    display: block;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin-bottom: 0.35rem;
+  }
+  .field .hint {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 0.35rem;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  input[type=text], input[type=number] {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 0.5rem 0.6rem;
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 0.85rem;
+  }
+  input:focus { outline: none; border-color: var(--amber-dim); }
+
+  .row { display: flex; gap: 1rem; }
+  .row .field { flex: 1; }
+
+  button {
+    background: var(--amber);
+    border: none;
+    color: #1a1816;
+    padding: 0.6rem 1.4rem;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    margin-top: 0.5rem;
+  }
+  button:hover { background: #eba447; }
+
+  .note {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    margin-top: 1.75rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .note strong { color: var(--text); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Settings</h1>
+      <a class="back" href="{{ url_for('browse') }}">&larr; back to folders</a>
+    </header>
+
+    {% if saved %}
+      <div class="banner saved">Saved. Takes effect on the next request &mdash; no restart needed.</div>
+    {% endif %}
+    {% if error %}
+      <div class="banner error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post">
+      <div class="field">
+        <label for="raw_root">RAW root</label>
+        <input type="text" id="raw_root" name="raw_root" value="{{ values.raw_root }}">
+        <span class="hint">Top of the browsable photo tree (the SMB mount point on the Pi, e.g. /mnt/photos).</span>
+      </div>
+
+      <div class="field">
+        <label for="raw_extensions">RAW extensions</label>
+        <input type="text" id="raw_extensions" name="raw_extensions" value="{{ values.raw_extensions }}">
+        <span class="hint">Comma-separated. Used to detect shoot folders and their RAW extension automatically.</span>
+      </div>
+
+      <div class="field">
+        <label for="triage_model">Triage model</label>
+        <input type="text" id="triage_model" name="triage_model" value="{{ values.triage_model }}">
+        <span class="hint">Anthropic model ID used for reject/rating/keyword suggestions.</span>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="batch_size">Batch size</label>
+          <input type="number" id="batch_size" name="batch_size" min="1" value="{{ values.batch_size }}">
+          <span class="hint">Images sent per API call.</span>
+        </div>
+        <div class="field">
+          <label for="max_preview_dimension">Max preview dimension</label>
+          <input type="number" id="max_preview_dimension" name="max_preview_dimension" min="1" value="{{ values.max_preview_dimension }}">
+          <span class="hint">Long edge, in pixels, previews are downscaled to before sending.</span>
+        </div>
+      </div>
+
+      <button type="submit">Save</button>
+    </form>
+
+    <div class="note">
+      <strong>Not here:</strong> <code>ANTHROPIC_API_KEY</code> is a secret and stays in the systemd unit's
+      <code>Environment=</code> line, not in this settings file, so it's never displayed or edited over the network.
+    </div>
+  </div>
+</body>
+</html>

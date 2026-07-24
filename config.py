@@ -1,20 +1,39 @@
+import json
 import os
 
-# Top of the browsable tree on the Pi (the SMB mount point). The dashboard
-# lets you navigate down from here to whatever depth your shoot folders
-# actually live at - no need to hardcode a specific year/subfolder.
-RAW_ROOT = os.environ.get("RAW_ROOT", "/mnt/photos")
+# Fallback defaults. These are how every setting below used to be
+# configured (env vars / hardcoded), and remain the fallback for any key
+# missing from settings.json (including when the file doesn't exist at all).
+DEFAULT_RAW_ROOT = os.environ.get("RAW_ROOT", "/mnt/photos")
+DEFAULT_TRIAGE_MODEL = os.environ.get("TRIAGE_MODEL", "claude-haiku-4-5-20251001")
+DEFAULT_BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "8"))
+DEFAULT_MAX_PREVIEW_DIMENSION = int(os.environ.get("MAX_PREVIEW_DIMENSION", "1568"))
+DEFAULT_RAW_EXTENSIONS = ["cr2", "cr3", "nef", "arw", "raf", "dng", "orf", "rw2"]
 
-TRIAGE_MODEL = os.environ.get("TRIAGE_MODEL", "claude-haiku-4-5-20251001")
-BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "8"))
+SETTINGS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")
 
-# Claude's vision doesn't benefit from images larger than this on the long
-# edge (it downsizes internally) - and camera-embedded RAW previews vary
-# wildly in size (some bodies embed full-resolution previews 5-10MB+ each),
-# so skipping the resize let a batch of them blow past the API's request
-# size limit (413 request_too_large).
-MAX_PREVIEW_DIMENSION = int(os.environ.get("MAX_PREVIEW_DIMENSION", "1568"))
 
-# Extensions checked to decide whether a folder is a "shoot" (contains RAW
-# files directly) versus just an intermediate folder to browse through.
-RAW_EXTENSIONS = {"cr2", "cr3", "nef", "arw", "raf", "dng", "orf", "rw2"}
+def load_settings():
+    """Runtime-editable overrides written by the /settings page. Read fresh
+    on every call (cheap - it's a tiny local file) so edits take effect
+    immediately, with no service restart needed."""
+    overrides = {}
+    if os.path.exists(SETTINGS_PATH):
+        with open(SETTINGS_PATH) as f:
+            overrides = json.load(f)
+    return {
+        "raw_root": overrides.get("raw_root", DEFAULT_RAW_ROOT),
+        "triage_model": overrides.get("triage_model", DEFAULT_TRIAGE_MODEL),
+        "batch_size": overrides.get("batch_size", DEFAULT_BATCH_SIZE),
+        "max_preview_dimension": overrides.get(
+            "max_preview_dimension", DEFAULT_MAX_PREVIEW_DIMENSION
+        ),
+        "raw_extensions": set(
+            e.lower() for e in overrides.get("raw_extensions", DEFAULT_RAW_EXTENSIONS)
+        ),
+    }
+
+
+def save_settings(settings):
+    with open(SETTINGS_PATH, "w") as f:
+        json.dump(settings, f, indent=2)

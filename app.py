@@ -5,7 +5,7 @@ from collections import Counter
 
 from flask import Flask, render_template, request, redirect, url_for, abort
 
-from config import RAW_ROOT, RAW_EXTENSIONS
+from config import load_settings, save_settings
 from metadata import extract_previews, write_sidecar
 from triage import triage_folder
 
@@ -13,9 +13,10 @@ app = Flask(__name__)
 
 
 def safe_path(subpath):
-    """Resolve subpath under RAW_ROOT and refuse to escape it (e.g. via ../)."""
-    target = os.path.normpath(os.path.join(RAW_ROOT, subpath))
-    root = os.path.normpath(RAW_ROOT)
+    """Resolve subpath under raw_root and refuse to escape it (e.g. via ../)."""
+    raw_root = load_settings()["raw_root"]
+    target = os.path.normpath(os.path.join(raw_root, subpath))
+    root = os.path.normpath(raw_root)
     if not (target == root or target.startswith(root + os.sep)):
         abort(400)
     return target
@@ -52,11 +53,12 @@ def detect_raw_ext(path):
     default - a folder full of .CR3 files with a form defaulting to "CR2"
     causes /write to silently skip every row, since raw_path then never
     matches a real file. Picks the most common RAW extension present."""
+    raw_extensions = load_settings()["raw_extensions"]
     try:
         counts = Counter(
             f.rsplit(".", 1)[1].upper()
             for f in os.listdir(path)
-            if "." in f and f.rsplit(".", 1)[1].lower() in RAW_EXTENSIONS
+            if "." in f and f.rsplit(".", 1)[1].lower() in raw_extensions
         )
     except (FileNotFoundError, NotADirectoryError, PermissionError):
         return None
@@ -107,12 +109,66 @@ def browse(subpath=""):
         subdirs=subdir_entries,
         is_shoot=is_shoot,
         status=status,
+        raw_root=load_settings()["raw_root"],
     )
 
 
 @app.route("/help")
 def help_page():
     return render_template("help.html")
+
+
+@app.route("/settings", methods=["GET", "POST"])
+def settings_page():
+    if request.method == "POST":
+        form = request.form
+        try:
+            try:
+                batch_size = int(form.get("batch_size", ""))
+                max_preview_dimension = int(form.get("max_preview_dimension", ""))
+            except ValueError:
+                raise ValueError(
+                    "Batch size and max preview dimension must be whole numbers"
+                )
+
+            new_settings = {
+                "raw_root": form.get("raw_root", "").strip(),
+                "triage_model": form.get("triage_model", "").strip(),
+                "batch_size": batch_size,
+                "max_preview_dimension": max_preview_dimension,
+                "raw_extensions": [
+                    e.strip().lower()
+                    for e in form.get("raw_extensions", "").split(",")
+                    if e.strip()
+                ],
+            }
+            if not new_settings["raw_root"] or not new_settings["triage_model"]:
+                raise ValueError("RAW root and triage model can't be empty")
+            if batch_size < 1:
+                raise ValueError("Batch size must be a positive number")
+            if max_preview_dimension < 1:
+                raise ValueError("Max preview dimension must be a positive number")
+            if not new_settings["raw_extensions"]:
+                raise ValueError("At least one RAW extension is required")
+        except ValueError as e:
+            return render_template(
+                "settings.html", values=form, error=str(e), saved=None
+            )
+
+        save_settings(new_settings)
+        return redirect(url_for("settings_page", saved=1))
+
+    current = load_settings()
+    values = {
+        "raw_root": current["raw_root"],
+        "triage_model": current["triage_model"],
+        "batch_size": current["batch_size"],
+        "max_preview_dimension": current["max_preview_dimension"],
+        "raw_extensions": ", ".join(sorted(current["raw_extensions"])),
+    }
+    return render_template(
+        "settings.html", values=values, saved=request.args.get("saved"), error=None
+    )
 
 
 @app.route("/extract/<path:folder>", methods=["POST"])

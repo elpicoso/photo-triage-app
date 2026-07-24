@@ -6,7 +6,7 @@ import os
 import anthropic
 from PIL import Image
 
-from config import TRIAGE_MODEL, BATCH_SIZE, MAX_PREVIEW_DIMENSION
+from config import load_settings
 
 client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from environment
 
@@ -49,20 +49,21 @@ Filenames in order shown:
 """
 
 
-def encode_image(path):
-    """Downscale to MAX_PREVIEW_DIMENSION before sending to the API. Claude
+def encode_image(path, max_dimension):
+    """Downscale to max_dimension before sending to the API. Claude
     downsizes large images internally anyway, and some cameras embed
     full-resolution previews (5-10MB+ each) that otherwise blow past the
     API's request size limit once a batch is assembled."""
     with Image.open(path) as img:
         img = img.convert("RGB")
-        img.thumbnail((MAX_PREVIEW_DIMENSION, MAX_PREVIEW_DIMENSION), Image.LANCZOS)
+        img.thumbnail((max_dimension, max_dimension), Image.LANCZOS)
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=85)
         return base64.standard_b64encode(buf.getvalue()).decode("utf-8")
 
 
 def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True):
+    settings = load_settings()
     content = []
     for path in image_paths:
         content.append(
@@ -71,7 +72,7 @@ def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True):
                 "source": {
                     "type": "base64",
                     "media_type": "image/jpeg",
-                    "data": encode_image(path),
+                    "data": encode_image(path, settings["max_preview_dimension"]),
                 },
             }
         )
@@ -90,7 +91,7 @@ def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True):
     )
 
     response = client.messages.create(
-        model=TRIAGE_MODEL,
+        model=settings["triage_model"],
         max_tokens=2000,
         messages=[{"role": "user", "content": content}],
     )
@@ -122,7 +123,7 @@ def triage_folder(preview_dir, batch_size=None, do_reject=True, do_rating=True, 
             for p in images
         ]
 
-    batch_size = batch_size or BATCH_SIZE
+    batch_size = batch_size or load_settings()["batch_size"]
     results = []
     for i in range(0, len(images), batch_size):
         batch = images[i : i + batch_size]

@@ -112,13 +112,16 @@
 </head>
 <body>
   <div class="wrap">
-    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+    <div style="display:flex; justify-content:space-between; align-items:baseline; gap: 1rem;">
       <h1>Photo <span>Triage</span></h1>
-      <a href="{{ url_for('help_page') }}" style="color: var(--muted); font-size: 0.8rem; text-decoration: none;">how to use this &rarr;</a>
+      <div style="display:flex; gap: 1rem;">
+        <a href="{{ url_for('settings_page') }}" style="color: var(--muted); font-size: 0.8rem; text-decoration: none;">settings</a>
+        <a href="{{ url_for('help_page') }}" style="color: var(--muted); font-size: 0.8rem; text-decoration: none;">how to use this &rarr;</a>
+      </div>
     </div>
 
     <div class="breadcrumbs">
-      <a href="{{ url_for('browse') }}">/mnt/photos</a>
+      <a href="{{ url_for('browse') }}">{{ raw_root }}</a>
       {% for crumb in breadcrumbs %}
         <span class="sep">/</span>
         {% if not loop.last %}

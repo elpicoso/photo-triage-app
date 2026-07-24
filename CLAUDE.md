@@ -26,13 +26,20 @@ keywords into XMP sidecars for Lightroom Classic import.
   mount looks dead, check the Mac's actual current IP
   (`ipconfig getifaddr en0`) against what's in the Pi's `/etc/fstab` /
   active `mount` output before assuming anything else is broken.
-- **Env vars for the service** (`ANTHROPIC_API_KEY`, `RAW_ROOT`) are set via
-  `Environment=` lines directly in the systemd unit file — NOT a `.env`
-  file. When editing that file, each line needs the full `NAME=value`
-  form; a bare value with no `NAME=` prefix silently does nothing (this
-  has happened before and caused every Claude API call to fail with an
-  auth error, with no obvious symptom other than "ERROR: ..." appearing
-  in the keywords column).
+- **`ANTHROPIC_API_KEY`** is set via an `Environment=` line directly in the
+  systemd unit file — NOT a `.env` file, and NOT editable from the app (see
+  Settings page below; deliberately excluded since the app is reachable
+  from anywhere on the LAN). When editing that file, each line needs the
+  full `NAME=value` form; a bare value with no `NAME=` prefix silently does
+  nothing (this has happened before and caused every Claude API call to
+  fail with an auth error, with no obvious symptom other than "ERROR: ..."
+  appearing in the keywords column).
+- **`RAW_ROOT`, triage model, batch size, max preview dimension, RAW
+  extensions** — these still have env var fallbacks (`RAW_ROOT`,
+  `TRIAGE_MODEL`, `BATCH_SIZE`, `MAX_PREVIEW_DIMENSION`) read at import
+  time in `config.py`, but as of the Settings page (below) they're
+  normally overridden at runtime via `settings.json` instead, no restart
+  needed.
 
 ## Deploy workflow
 
@@ -53,20 +60,37 @@ or got removed) — do the manual steps above until/unless it's recreated.
 ## Code layout
 
 - `app.py` — Flask routes: `/browse`, `/extract`, `/triage`, `/review`,
-  `/write`. Status per folder tracked by presence of `_previews/`,
-  `_previews/triage_results.csv`, and `_previews/.written`.
+  `/write`, `/settings`. Status per folder tracked by presence of
+  `_previews/`, `_previews/triage_results.csv`, and `_previews/.written`.
+  RAW extension per folder is auto-detected from what's actually on disk
+  (`detect_raw_ext()`), not hardcoded or form-supplied.
 - `metadata.py` — `extract_previews()` (calls exiftool to pull embedded
   JPEG previews from RAW files) and `write_sidecar()` (writes rating/
   keywords into XMP sidecars via exiftool, using fully-qualified tag names:
   `-XMP-xmp:Rating`, `-XMP-dc:Subject`, `-IPTC:Keywords` — NOT the generic
   `-Rating`/`-Keywords` shortcuts, which can land in the wrong namespace
   like `pdf:Keywords` on a freshly created sidecar).
-- `triage.py` — calls the Claude API (Haiku model, see `config.py`) in
-  batches to get reject/rating/keyword suggestions per image.
-- `templates/browse.html`, `templates/review.html` — UI. Note: there are
-  stray duplicate copies of these two files sitting in the repo ROOT
-  (not `templates/`) left over from an earlier mistake — harmless (Flask
-  doesn't read them from there) but should be deleted for clarity.
+- `triage.py` — calls the Claude API (model/batch size/preview size from
+  `config.load_settings()`) in batches to get reject/rating/keyword
+  suggestions per image. Preview JPEGs are downscaled (Pillow) to
+  `max_preview_dimension` before being base64-encoded and sent.
+- `config.py` — `load_settings()` / `save_settings()`: reads/writes
+  `settings.json` (gitignored, lives next to `app.py`, one per machine —
+  Mac and Pi each keep their own) with env-var-backed defaults for any
+  missing key. This is the runtime config used by the Settings page.
+- `templates/browse.html`, `templates/review.html`, `templates/settings.html`,
+  `templates/help.html` — UI. Note: there are stray duplicate copies of
+  `browse.html`/`review.html` sitting in the repo ROOT (not `templates/`)
+  left over from an earlier mistake — harmless (Flask doesn't read them
+  from there) but should be deleted for clarity.
+
+## Settings page
+
+`/settings` lets you edit `raw_root`, `raw_extensions`, `triage_model`,
+`batch_size`, and `max_preview_dimension` from the browser — writes to
+`settings.json`, takes effect on the next request, no restart needed.
+`ANTHROPIC_API_KEY` is deliberately NOT here (see Infrastructure above) —
+it stays secret-only, in the systemd unit file.
 
 ## Known gotchas / hard-won fixes
 
@@ -84,11 +108,14 @@ or got removed) — do the manual steps above until/unless it's recreated.
   `os.makedirs(preview_dir, exist_ok=True)` — the previews directory does
   NOT need to be pre-created; if a "no such file" error shows up, look
   elsewhere first.
-- `raw_ext` is currently hardcoded per-template rather than remembered
-  from the extract step — if a folder has `.CR3` files but a form still
-  defaults to `"CR2"` (or vice versa), the `/write` route will silently
-  skip every row (no error, no sidecar) because `raw_path` never matches
-  an actual file on disk. Worth fixing properly (see backlog).
+- Camera-embedded RAW previews vary wildly in size — some bodies embed
+  full-resolution JPEGs (5-10MB+ each). Triage sends `batch_size` previews
+  per API call; unresized, that can exceed the API's request size limit
+  (413 `request_too_large`) once base64-encoded (~33% bigger than raw).
+  Fixed by downscaling to `max_preview_dimension` (config/settings, default
+  1568px long edge — Claude's own recommended max) before encoding, but if
+  this recurs after someone lowers that setting or a camera embeds
+  something even larger, that's where to look.
 - Never paste a live API key or other secret directly into a chat session
   — if it happens, treat it as compromised and rotate it immediately via
   the Anthropic Console (API Keys → disable old key → Create Key).
@@ -111,9 +138,6 @@ here before assuming the write step failed.
 
 ## Backlog
 
-- **Bug:** `raw_ext` should be threaded through from the extract step
-  automatically instead of being hardcoded (currently `"CR2"` in some
-  places) — currently causes silent write failures on `.CR3` folders.
 - **Feature:** progress indicator in the UI showing extraction/processing
   progress on files (currently only visible via `journalctl -f` or
   watching the `_previews` folder fill up).
