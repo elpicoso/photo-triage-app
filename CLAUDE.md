@@ -67,9 +67,11 @@ or got removed) — do the manual steps above until/unless it's recreated.
 - `metadata.py` — `extract_previews()` (calls exiftool to pull embedded
   JPEG previews from RAW files) and `write_sidecar()` (writes rating/
   keywords into XMP sidecars via exiftool, using fully-qualified tag names:
-  `-XMP-xmp:Rating`, `-XMP-dc:Subject`, `-IPTC:Keywords` — NOT the generic
-  `-Rating`/`-Keywords` shortcuts, which can land in the wrong namespace
-  like `pdf:Keywords` on a freshly created sidecar).
+  `-XMP-xmp:Rating`, `-XMP-dc:Subject` — NOT the generic `-Rating`/
+  `-Keywords` shortcuts, which can land in the wrong namespace like
+  `pdf:Keywords` on a freshly created sidecar. No `-IPTC:Keywords` tag —
+  IPTC-IIM has no home in a bare `.xmp` file, so exiftool silently no-ops
+  that write; Lightroom's Keywords panel reads `XMP-dc:Subject` anyway).
 - `triage.py` — calls the Claude API (model/batch size/preview size from
   `config.load_settings()`) in batches to get reject/rating/keyword
   suggestions per image. Preview JPEGs are downscaled (Pillow) to
@@ -119,11 +121,17 @@ it stays secret-only, in the systemd unit file.
 - Never paste a live API key or other secret directly into a chat session
   — if it happens, treat it as compromised and rotate it immediately via
   the Anthropic Console (API Keys → disable old key → Create Key).
+- `/write`'s reject flag has no write-time override (unlike rating and
+  keywords, which have checkboxes in `review.html`) — any row with
+  `reject=yes` always gets `XMP-xmp:Rating=-1` + `Label=Red` written.
+  This is intentional (confirmed with Wade): reject is a binary, permanent
+  judgment, not something worth selectively skipping at write time the
+  way you might skip keywords for speed.
 
 ## Lightroom import gotcha
 
 After running `/write` and confirming XMP sidecars have the expected data
-(e.g. `exiftool -XMP-dc:Subject -IPTC:Keywords file.xmp`), **"Synchronize
+(e.g. `exiftool -XMP-dc:Subject file.xmp`), **"Synchronize
 Folder" in Lightroom is NOT enough** to pull in the new metadata for photos
 already in the catalog — it only detects added/removed files, not changed
 sidecars. To actually load the new rating/keywords:
@@ -141,13 +149,6 @@ here before assuming the write step failed.
 - **Feature:** progress indicator in the UI showing extraction/processing
   progress on files (currently only visible via `journalctl -f` or
   watching the `_previews` folder fill up).
-- **Feature:** selectable operations per extraction job (rate / keyword /
-  evaluate) instead of always running all three — implemented at the
-  triage step (via checkboxes + `.ops.json`) and overridable again at
-  write time. Already shipped as of the last session; verify it's
-  working end-to-end (a folder run with keywords unchecked should come
-  back with an empty keywords column, and unchecking at write time
-  should produce a sidecar with no `XMP-dc:Subject`/`IPTC:Keywords` tags).
 - **Feature:** duplicate detection — likely perceptual hashing rather
   than exact-file hashing, since Wade shoots bursts; more Pi compute per
   file, needs its own review UI for flagged duplicates. Not yet designed.

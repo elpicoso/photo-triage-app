@@ -37,9 +37,13 @@ def extract_previews(raw_dir, preview_dir, raw_ext):
 
 def write_sidecar(raw_path, rating=None, reject=False, keywords=None):
     """Writes rating/keywords into an XMP sidecar. Uses fully-qualified tag
-    names (XMP-xmp:Rating, XMP-dc:Subject, IPTC:Keywords) rather than the
-    generic -Rating/-Keywords shortcuts, which can land in unexpected
-    namespaces (e.g. pdf:Keywords) on a freshly created sidecar.
+    names (XMP-xmp:Rating, XMP-dc:Subject) rather than the generic
+    -Rating/-Keywords shortcuts, which can land in unexpected namespaces
+    (e.g. pdf:Keywords) on a freshly created sidecar. Lightroom reads
+    XMP-dc:Subject for its Keywords panel; there's no IPTC:Keywords tag
+    here because IPTC-IIM has no home in a bare .xmp file - exiftool
+    silently no-ops that write rather than erroring, so it's not worth
+    carrying.
 
     rating/keywords are optional - pass None (or leave unset) to skip
     writing that field entirely, e.g. when the user only selected "rating"
@@ -58,7 +62,6 @@ def write_sidecar(raw_path, rating=None, reject=False, keywords=None):
             tags.append(f"-XMP-xmp:Rating={rating}")
         if keywords is not None and keywords != "":
             tags.append(f"-XMP-dc:Subject={keywords}")
-            tags.append(f"-IPTC:Keywords={keywords}")
 
     if not tags:
         return
