@@ -63,7 +63,7 @@
     text-transform: none;
     letter-spacing: normal;
   }
-  input[type=text], input[type=number] {
+  input[type=text], input[type=number], textarea {
     width: 100%;
     background: var(--panel);
     border: 1px solid var(--line);
@@ -73,7 +73,23 @@
     font-family: "SF Mono", Consolas, monospace;
     font-size: 0.85rem;
   }
-  input:focus { outline: none; border-color: var(--amber-dim); }
+  textarea {
+    resize: vertical;
+    min-height: 3.6rem;
+    line-height: 1.4;
+  }
+  input:focus, textarea:focus { outline: none; border-color: var(--amber-dim); }
+
+  h2 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--muted);
+    margin: 1.75rem 0 1rem 0;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--line);
+  }
 
   .row { display: flex; gap: 1rem; }
   .row .field { flex: 1; }
@@ -221,6 +237,26 @@
           <input type="number" id="max_preview_dimension" name="max_preview_dimension" min="1" value="{{ values.max_preview_dimension }}">
           <span class="hint">Long edge, in pixels, previews are downscaled to before sending. The API hard-rejects any image over 8000px, but Claude itself only uses up to 1568px (standard models) or 2576px (Claude 4.7+ high-resolution tier) &mdash; anything larger than your model's tier is wasted bandwidth, not added fidelity.</span>
         </div>
+      </div>
+
+      <h2>Evaluation criteria</h2>
+
+      <div class="field">
+        <label for="reject_criteria">Reject criteria</label>
+        <textarea id="reject_criteria" name="reject_criteria" rows="3">{{ values.reject_criteria }}</textarea>
+        <span class="hint">Sent verbatim as the "reject:" instruction when Flag rejects is selected at triage time.</span>
+      </div>
+
+      <div class="field">
+        <label for="rating_criteria">Rating criteria</label>
+        <textarea id="rating_criteria" name="rating_criteria" rows="2">{{ values.rating_criteria }}</textarea>
+        <span class="hint">Sent verbatim as the "rating:" instruction when Rate is selected at triage time.</span>
+      </div>
+
+      <div class="field">
+        <label for="keyword_criteria">Keyword criteria</label>
+        <textarea id="keyword_criteria" name="keyword_criteria" rows="3">{{ values.keyword_criteria }}</textarea>
+        <span class="hint">Sent verbatim as the "keywords:" instruction when Keyword is selected at triage time.</span>
       </div>
 
       <button type="submit">Save</button>

@@ -220,6 +220,9 @@ def settings_page():
                     for e in form.get("raw_extensions", "").split(",")
                     if e.strip()
                 ],
+                "reject_criteria": form.get("reject_criteria", "").strip(),
+                "rating_criteria": form.get("rating_criteria", "").strip(),
+                "keyword_criteria": form.get("keyword_criteria", "").strip(),
             }
             if not new_settings["raw_root"] or not new_settings["triage_model"]:
                 raise ValueError("RAW root and triage model can't be empty")
@@ -229,6 +232,15 @@ def settings_page():
                 raise ValueError("Max preview dimension must be a positive number")
             if not new_settings["raw_extensions"]:
                 raise ValueError("At least one RAW extension is required")
+            if not (
+                new_settings["reject_criteria"]
+                and new_settings["rating_criteria"]
+                and new_settings["keyword_criteria"]
+            ):
+                raise ValueError(
+                    "Reject, rating, and keyword criteria can't be empty - Claude "
+                    "needs instructions for any field it's asked to fill in"
+                )
         except ValueError as e:
             return render_template(
                 "settings.html", values=form, error=str(e), saved=None
@@ -244,6 +256,9 @@ def settings_page():
         "batch_size": current["batch_size"],
         "max_preview_dimension": current["max_preview_dimension"],
         "raw_extensions": ", ".join(sorted(current["raw_extensions"])),
+        "reject_criteria": current["reject_criteria"],
+        "rating_criteria": current["rating_criteria"],
+        "keyword_criteria": current["keyword_criteria"],
     }
     return render_template(
         "settings.html", values=values, saved=request.args.get("saved"), error=None

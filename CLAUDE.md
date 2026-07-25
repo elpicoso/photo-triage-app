@@ -94,10 +94,20 @@ or got removed) — do the manual steps above until/unless it's recreated.
 ## Settings page
 
 `/settings` lets you edit `raw_root`, `raw_extensions`, `triage_model`,
-`batch_size`, and `max_preview_dimension` from the browser — writes to
-`settings.json`, takes effect on the next request, no restart needed.
-`ANTHROPIC_API_KEY` is deliberately NOT here (see Infrastructure above) —
-it stays secret-only, in the systemd unit file.
+`batch_size`, `max_preview_dimension`, and the three evaluation criteria
+(`reject_criteria`, `rating_criteria`, `keyword_criteria`) from the
+browser — writes to `settings.json`, takes effect on the next request,
+no restart needed. `ANTHROPIC_API_KEY` is deliberately NOT here (see
+Infrastructure above) — it stays secret-only, in the systemd unit file.
+
+The evaluation criteria are the exact instruction text sent to Claude
+for the "reject:", "rating:", and "keywords:" lines in the triage
+prompt (see `triage.build_prompt()`) — only the field-name prefix and
+the JSON response format are fixed, so editing these can't break the
+response shape, just tune what counts as a reject, how generous ratings
+are, or keyword style/count. All three are required (non-empty) since
+an empty criteria line would leave Claude with no instruction for a
+field it's still being asked to fill in.
 
 ## Known gotchas / hard-won fixes
 

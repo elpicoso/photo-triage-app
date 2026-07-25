@@ -10,6 +10,21 @@ DEFAULT_BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "8"))
 DEFAULT_MAX_PREVIEW_DIMENSION = int(os.environ.get("MAX_PREVIEW_DIMENSION", "1568"))
 DEFAULT_RAW_EXTENSIONS = ["cr2", "cr3", "nef", "arw", "raf", "dng", "orf", "rw2"]
 
+# Evaluation criteria sent to Claude as part of the triage prompt (see
+# triage.build_prompt()). These are the exact instructions the model
+# follows for each field - editable via the Settings page so they can be
+# tuned (e.g. reject tolerance, keyword style) without a code change.
+DEFAULT_REJECT_CRITERIA = (
+    '"yes" if technically bad (blurry, out of focus, blown highlights, '
+    "poorly composed). Note: intentional long exposures, star trails, and "
+    "motion blur in moving elements (water, clouds) are NOT rejects."
+)
+DEFAULT_RATING_CRITERIA = "1-5 stars if kept (use 0 if rejected)"
+DEFAULT_KEYWORD_CRITERIA = (
+    "5-8 specific, descriptive keywords, comma-separated "
+    '(e.g. "Milky Way, granite boulders, long exposure" not "nature, sky")'
+)
+
 SETTINGS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")
 
 
@@ -31,6 +46,9 @@ def load_settings():
         "raw_extensions": set(
             e.lower() for e in overrides.get("raw_extensions", DEFAULT_RAW_EXTENSIONS)
         ),
+        "reject_criteria": overrides.get("reject_criteria", DEFAULT_REJECT_CRITERIA),
+        "rating_criteria": overrides.get("rating_criteria", DEFAULT_RATING_CRITERIA),
+        "keyword_criteria": overrides.get("keyword_criteria", DEFAULT_KEYWORD_CRITERIA),
     }
 
 

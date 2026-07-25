@@ -11,29 +11,33 @@ from config import load_settings
 client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from environment
 
 
-def build_prompt(n, filenames, do_reject, do_rating, do_keywords):
+def build_prompt(
+    n,
+    filenames,
+    do_reject,
+    do_rating,
+    do_keywords,
+    reject_criteria,
+    rating_criteria,
+    keyword_criteria,
+):
     """Builds the triage prompt with only the instructions/fields for
     operations the user actually selected, so we're not asking Claude
-    (and paying for) fields we're going to throw away."""
+    (and paying for) fields we're going to throw away. The criteria text
+    for each field is user-editable (Settings page) - only the field name
+    prefix and the JSON format below are fixed, so the response shape
+    can't be broken by an edit."""
     instructions = []
     fields = []
 
     if do_reject:
-        instructions.append(
-            '- reject: "yes" if technically bad (blurry, out of focus, blown '
-            'highlights, poorly composed). Note: intentional long exposures, '
-            'star trails, and motion blur in moving elements (water, clouds) '
-            'are NOT rejects.'
-        )
+        instructions.append(f"- reject: {reject_criteria}")
         fields.append('"reject": "yes/no"')
     if do_rating:
-        instructions.append("- rating: 1-5 stars if kept (use 0 if rejected)")
+        instructions.append(f"- rating: {rating_criteria}")
         fields.append('"rating": 0-5')
     if do_keywords:
-        instructions.append(
-            '- keywords: 5-8 specific, descriptive keywords, comma-separated '
-            '(e.g. "Milky Way, granite boulders, long exposure" not "nature, sky")'
-        )
+        instructions.append(f"- keywords: {keyword_criteria}")
         fields.append('"keywords": "..."')
 
     return f"""Review these {n} photos from a landscape/astrophotography shoot.
@@ -86,6 +90,9 @@ def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True):
                 do_reject=do_reject,
                 do_rating=do_rating,
                 do_keywords=do_keywords,
+                reject_criteria=settings["reject_criteria"],
+                rating_criteria=settings["rating_criteria"],
+                keyword_criteria=settings["keyword_criteria"],
             ),
         }
     )
