@@ -114,6 +114,15 @@ def is_shoot_folder(path):
     return detect_raw_ext(path) is not None
 
 
+def api_key_configured():
+    """ANTHROPIC_API_KEY is env-var-only (never in settings.json - see
+    Settings page docstring), so a missing/empty value can't be detected
+    via load_settings(). Without this check, a fresh install with no key
+    set just runs triage and gets a cryptic "ERROR: ..." per row instead
+    of a clear signal that setup isn't finished."""
+    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+
+
 @app.route("/")
 @app.route("/browse/")
 @app.route("/browse/<path:subpath>")
@@ -154,6 +163,7 @@ def browse(subpath=""):
         status=status,
         progress=progress,
         raw_root=load_settings()["raw_root"],
+        api_key_configured=api_key_configured(),
     )
 
 
@@ -220,6 +230,7 @@ def settings_page():
                     for e in form.get("raw_extensions", "").split(",")
                     if e.strip()
                 ],
+                "shoot_context": form.get("shoot_context", "").strip(),
                 "reject_criteria": form.get("reject_criteria", "").strip(),
                 "rating_criteria": form.get("rating_criteria", "").strip(),
                 "keyword_criteria": form.get("keyword_criteria", "").strip(),
@@ -232,6 +243,8 @@ def settings_page():
                 raise ValueError("Max preview dimension must be a positive number")
             if not new_settings["raw_extensions"]:
                 raise ValueError("At least one RAW extension is required")
+            if not new_settings["shoot_context"]:
+                raise ValueError("Shoot context can't be empty")
             if not (
                 new_settings["reject_criteria"]
                 and new_settings["rating_criteria"]
@@ -256,6 +269,7 @@ def settings_page():
         "batch_size": current["batch_size"],
         "max_preview_dimension": current["max_preview_dimension"],
         "raw_extensions": ", ".join(sorted(current["raw_extensions"])),
+        "shoot_context": current["shoot_context"],
         "reject_criteria": current["reject_criteria"],
         "rating_criteria": current["rating_criteria"],
         "keyword_criteria": current["keyword_criteria"],

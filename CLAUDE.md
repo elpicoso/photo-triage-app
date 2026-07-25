@@ -94,11 +94,19 @@ or got removed) — do the manual steps above until/unless it's recreated.
 ## Settings page
 
 `/settings` lets you edit `raw_root`, `raw_extensions`, `triage_model`,
-`batch_size`, `max_preview_dimension`, and the three evaluation criteria
-(`reject_criteria`, `rating_criteria`, `keyword_criteria`) from the
-browser — writes to `settings.json`, takes effect on the next request,
-no restart needed. `ANTHROPIC_API_KEY` is deliberately NOT here (see
-Infrastructure above) — it stays secret-only, in the systemd unit file.
+`batch_size`, `max_preview_dimension`, `shoot_context`, and the three
+evaluation criteria (`reject_criteria`, `rating_criteria`,
+`keyword_criteria`) from the browser — writes to `settings.json`, takes
+effect on the next request, no restart needed. `ANTHROPIC_API_KEY` is
+deliberately NOT here (see Infrastructure above) — it stays secret-only,
+in the systemd unit file.
+
+`shoot_context` is the one-line genre framing ("a landscape/astrophotography
+shoot" by default) in the triage prompt — this repo started as
+Wade-specific but is meant to be installable by others for any genre; see
+`README.md` (general install docs, not Wade's Pi-specific setup — that
+stays here) and `deploy/photo-triage.service` / `Dockerfile` /
+`docker-compose.yml` for the two supported install paths.
 
 The evaluation criteria are the exact instruction text sent to Claude
 for the "reject:", "rating:", and "keywords:" lines in the triage

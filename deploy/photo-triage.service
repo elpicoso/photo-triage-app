@@ -1,0 +1,42 @@
+# Template systemd unit for running Photo Triage as an always-on service.
+#
+# Install:
+#   sudo cp deploy/photo-triage.service /etc/systemd/system/photo-triage.service
+#   sudo nano /etc/systemd/system/photo-triage.service   # fill in the placeholders below
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now photo-triage
+#
+# Check it came up clean:
+#   systemctl status photo-triage
+#   sudo journalctl -u photo-triage -n 30 --no-pager
+#
+# Placeholders to fill in:
+#   <USER>              - the user to run as, e.g. pi or wade
+#   <WORKING_DIRECTORY>  - absolute path to this repo on the machine, e.g. /home/pi/photo-triage-app
+#   <YOUR_API_KEY_HERE>  - your Anthropic API key (console.anthropic.com)
+#
+# ANTHROPIC_API_KEY must use the full NAME=value form on its own line below -
+# a bare value with no "ANTHROPIC_API_KEY=" prefix silently does nothing,
+# and every Claude API call will fail with an auth error (the only visible
+# symptom is "ERROR: ..." showing up in the app's keywords column).
+#
+# If your photos live on a mounted network share (see README ->
+# "Optional: mounting a remote photo share"), add the mount unit to
+# After=/Wants= below so this service waits for the mount, e.g.:
+#   After=network-online.target mnt-photos.mount
+#   Wants=network-online.target
+
+[Unit]
+Description=Photo Triage App
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=<USER>
+WorkingDirectory=<WORKING_DIRECTORY>
+Environment="ANTHROPIC_API_KEY=<YOUR_API_KEY_HERE>"
+ExecStart=<WORKING_DIRECTORY>/venv/bin/python3 app.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

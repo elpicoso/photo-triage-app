@@ -10,6 +10,11 @@ DEFAULT_BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "8"))
 DEFAULT_MAX_PREVIEW_DIMENSION = int(os.environ.get("MAX_PREVIEW_DIMENSION", "1568"))
 DEFAULT_RAW_EXTENSIONS = ["cr2", "cr3", "nef", "arw", "raf", "dng", "orf", "rw2"]
 
+# The framing/genre sentence in the triage prompt (see triage.build_prompt())
+# - e.g. swap to "a wedding" or "a corporate headshot session" for shoots
+# that aren't landscape/astro.
+DEFAULT_SHOOT_CONTEXT = "a landscape/astrophotography shoot"
+
 # Evaluation criteria sent to Claude as part of the triage prompt (see
 # triage.build_prompt()). These are the exact instructions the model
 # follows for each field - editable via the Settings page so they can be
@@ -46,6 +51,7 @@ def load_settings():
         "raw_extensions": set(
             e.lower() for e in overrides.get("raw_extensions", DEFAULT_RAW_EXTENSIONS)
         ),
+        "shoot_context": overrides.get("shoot_context", DEFAULT_SHOOT_CONTEXT),
         "reject_criteria": overrides.get("reject_criteria", DEFAULT_REJECT_CRITERIA),
         "rating_criteria": overrides.get("rating_criteria", DEFAULT_RATING_CRITERIA),
         "keyword_criteria": overrides.get("keyword_criteria", DEFAULT_KEYWORD_CRITERIA),

@@ -17,16 +17,17 @@ def build_prompt(
     do_reject,
     do_rating,
     do_keywords,
+    shoot_context,
     reject_criteria,
     rating_criteria,
     keyword_criteria,
 ):
     """Builds the triage prompt with only the instructions/fields for
     operations the user actually selected, so we're not asking Claude
-    (and paying for) fields we're going to throw away. The criteria text
-    for each field is user-editable (Settings page) - only the field name
-    prefix and the JSON format below are fixed, so the response shape
-    can't be broken by an edit."""
+    (and paying for) fields we're going to throw away. shoot_context and
+    the per-field criteria are all user-editable (Settings page) - only
+    the field name prefixes and the JSON format below are fixed, so the
+    response shape can't be broken by an edit."""
     instructions = []
     fields = []
 
@@ -40,7 +41,7 @@ def build_prompt(
         instructions.append(f"- keywords: {keyword_criteria}")
         fields.append('"keywords": "..."')
 
-    return f"""Review these {n} photos from a landscape/astrophotography shoot.
+    return f"""Review these {n} photos from {shoot_context}.
 
 For each image, decide:
 {chr(10).join(instructions)}
@@ -90,6 +91,7 @@ def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True):
                 do_reject=do_reject,
                 do_rating=do_rating,
                 do_keywords=do_keywords,
+                shoot_context=settings["shoot_context"],
                 reject_criteria=settings["reject_criteria"],
                 rating_criteria=settings["rating_criteria"],
                 keyword_criteria=settings["keyword_criteria"],

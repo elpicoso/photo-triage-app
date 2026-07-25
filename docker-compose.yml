@@ -1,0 +1,18 @@
+services:
+  photo-triage:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - RAW_ROOT=/photos
+    volumes:
+      # Replace the left side with the actual path to your photos on the
+      # host. The container only ever sees /photos - that's what RAW_ROOT
+      # above points at.
+      - /path/to/your/photos:/photos
+      # Persists Settings-page edits across container rebuilds. Run
+      # `touch settings.json` once before first `docker compose up` -
+      # Docker will otherwise create it as a directory instead of a file.
+      - ./settings.json:/app/settings.json
+    restart: unless-stopped

@@ -242,6 +242,12 @@
       <h2>Evaluation criteria</h2>
 
       <div class="field">
+        <label for="shoot_context">Shoot context</label>
+        <input type="text" id="shoot_context" name="shoot_context" value="{{ values.shoot_context }}">
+        <span class="hint">Sent as "Review these N photos from &lt;this&gt;." Change it to match what you actually shoot, e.g. "a wedding" or "a sports event" &mdash; the reject/rating/keyword criteria below assume landscape/astro by default, so revisit those too if you change this.</span>
+      </div>
+
+      <div class="field">
         <label for="reject_criteria">Reject criteria</label>
         <textarea id="reject_criteria" name="reject_criteria" rows="3">{{ values.reject_criteria }}</textarea>
         <span class="hint">Sent verbatim as the "reject:" instruction when Flag rejects is selected at triage time.</span>
