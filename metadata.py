@@ -1,5 +1,6 @@
 import os
 import subprocess
+import time
 
 
 def find_preview_tag(sample_raw_path):
@@ -14,7 +15,11 @@ def find_preview_tag(sample_raw_path):
     return "-PreviewImage"
 
 
-def extract_previews(raw_dir, preview_dir, raw_ext):
+def extract_previews(raw_dir, preview_dir, raw_ext, progress_callback=None):
+    """progress_callback(done, total), if given, is polled every ~0.5s while
+    exiftool runs - it processes the whole directory in one batched call, so
+    the only outside signal of progress is counting .jpg files as they land
+    in preview_dir."""
     os.makedirs(preview_dir, exist_ok=True)
     raw_files = [
         f for f in os.listdir(raw_dir) if f.lower().endswith(raw_ext.lower())
@@ -22,17 +27,28 @@ def extract_previews(raw_dir, preview_dir, raw_ext):
     if not raw_files:
         return 0
 
+    total = len(raw_files)
     tag = find_preview_tag(os.path.join(raw_dir, raw_files[0]))
-    subprocess.run(
+    proc = subprocess.Popen(
         [
             "exiftool", "-b", tag,
             "-w", os.path.join(preview_dir, "%f.jpg"),
             "-ext", raw_ext,
             raw_dir,
-        ],
-        check=True,
+        ]
     )
-    return len(raw_files)
+    while proc.poll() is None:
+        if progress_callback:
+            done = sum(
+                1 for f in os.listdir(preview_dir) if f.lower().endswith(".jpg")
+            )
+            progress_callback(min(done, total), total)
+        time.sleep(0.5)
+    if progress_callback:
+        progress_callback(total, total)
+    if proc.returncode != 0:
+        raise subprocess.CalledProcessError(proc.returncode, proc.args)
+    return total
 
 
 def write_sidecar(raw_path, rating=None, reject=False, keywords=None):

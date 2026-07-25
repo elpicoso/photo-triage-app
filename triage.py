@@ -108,16 +108,26 @@ def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True):
     return parsed
 
 
-def triage_folder(preview_dir, batch_size=None, do_reject=True, do_rating=True, do_keywords=True):
+def triage_folder(
+    preview_dir,
+    batch_size=None,
+    do_reject=True,
+    do_rating=True,
+    do_keywords=True,
+    progress_callback=None,
+):
     images = sorted(
         os.path.join(preview_dir, f)
         for f in os.listdir(preview_dir)
         if f.lower().endswith(".jpg")
     )
+    total = len(images)
 
     if not (do_reject or do_rating or do_keywords):
         # Nothing selected - skip the API entirely, return empty rows
         # so the review table still lists every file.
+        if progress_callback:
+            progress_callback(total, total)
         return [
             {"filename": os.path.basename(p), "reject": "", "rating": "", "keywords": ""}
             for p in images
@@ -125,6 +135,8 @@ def triage_folder(preview_dir, batch_size=None, do_reject=True, do_rating=True, 
 
     batch_size = batch_size or load_settings()["batch_size"]
     results = []
+    if progress_callback:
+        progress_callback(0, total)
     for i in range(0, len(images), batch_size):
         batch = images[i : i + batch_size]
         try:
@@ -143,4 +155,6 @@ def triage_folder(preview_dir, batch_size=None, do_reject=True, do_rating=True, 
                         "keywords": f"ERROR: {e}",
                     }
                 )
+        if progress_callback:
+            progress_callback(len(results), total)
     return results

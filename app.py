@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+import threading
 from collections import Counter
 
 from flask import Flask, render_template, request, redirect, url_for, abort
@@ -36,6 +37,47 @@ def ops_path(folder):
 
 def written_marker(folder):
     return os.path.join(preview_dir(folder), ".written")
+
+
+def progress_path(folder):
+    return os.path.join(preview_dir(folder), ".progress.json")
+
+
+def write_progress(folder, stage, done, total, error=None):
+    """Written by the background extract/triage thread, polled by /status.
+    Written to a temp file then renamed so a concurrent GET never sees a
+    half-written JSON file."""
+    data = {"stage": stage, "done": done, "total": total}
+    if error:
+        data["error"] = error
+    path = progress_path(folder)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.replace(tmp, path)
+
+
+def clear_progress(folder):
+    try:
+        os.remove(progress_path(folder))
+    except FileNotFoundError:
+        pass
+
+
+def read_progress(folder):
+    path = progress_path(folder)
+    if not os.path.exists(path):
+        return None
+    with open(path) as f:
+        return json.load(f)
+
+
+def is_active(folder):
+    """True if a background extract/triage is actually running - an error
+    state leaves the progress file behind so the UI can show it, but
+    shouldn't block starting a fresh attempt."""
+    progress = read_progress(folder)
+    return progress is not None and "error" not in progress
 
 
 def get_status(folder):
@@ -101,6 +143,7 @@ def browse(subpath=""):
 
     is_shoot = bool(subpath) and is_shoot_folder(current_dir)
     status = get_status(subpath) if is_shoot else None
+    progress = read_progress(subpath) if is_shoot else None
 
     return render_template(
         "browse.html",
@@ -109,8 +152,19 @@ def browse(subpath=""):
         subdirs=subdir_entries,
         is_shoot=is_shoot,
         status=status,
+        progress=progress,
         raw_root=load_settings()["raw_root"],
     )
+
+
+@app.route("/status/<path:folder>")
+def status_route(folder):
+    data = {"status": get_status(folder), "active": False}
+    progress = read_progress(folder)
+    if progress is not None:
+        data["active"] = "error" not in progress
+        data.update(progress)
+    return data
 
 
 @app.route("/help")
@@ -198,42 +252,81 @@ def settings_page():
 
 @app.route("/extract/<path:folder>", methods=["POST"])
 def extract(folder):
+    if is_active(folder):
+        return redirect(url_for("browse", subpath=folder))
+
     raw_dir = safe_path(folder)
     raw_ext = detect_raw_ext(raw_dir)
     if raw_ext is None:
         abort(400, "No RAW files found in this folder")
-    extract_previews(raw_dir, preview_dir(folder), raw_ext)
+
+    os.makedirs(preview_dir(folder), exist_ok=True)
+    write_progress(folder, "extracting", 0, 0)
+
+    def run():
+        try:
+            extract_previews(
+                raw_dir,
+                preview_dir(folder),
+                raw_ext,
+                progress_callback=lambda done, total: write_progress(
+                    folder, "extracting", done, total
+                ),
+            )
+        except Exception as e:
+            write_progress(folder, "extracting", 0, 0, error=str(e))
+            return
+        clear_progress(folder)
+
+    threading.Thread(target=run, daemon=True).start()
     return redirect(url_for("browse", subpath=folder))
 
 
 @app.route("/triage/<path:folder>", methods=["POST"])
 def triage(folder):
+    if is_active(folder):
+        return redirect(url_for("browse", subpath=folder))
+
     selected_ops = request.form.getlist("ops")
     do_reject = "reject" in selected_ops
     do_rating = "rating" in selected_ops
     do_keywords = "keywords" in selected_ops
 
-    results = triage_folder(
-        preview_dir(folder),
-        do_reject=do_reject,
-        do_rating=do_rating,
-        do_keywords=do_keywords,
-    )
-    with open(csv_path(folder), "w", newline="") as f:
-        writer = csv.DictWriter(
-            f, fieldnames=["filename", "reject", "rating", "keywords"]
-        )
-        writer.writeheader()
-        writer.writerows(results)
+    write_progress(folder, "triaging", 0, 0)
 
-    # Remember what was selected so the review step can default its own
-    # write-time checkboxes to match (with the option to override there).
-    with open(ops_path(folder), "w") as f:
-        json.dump(
-            {"reject": do_reject, "rating": do_rating, "keywords": do_keywords}, f
-        )
+    def run():
+        try:
+            results = triage_folder(
+                preview_dir(folder),
+                do_reject=do_reject,
+                do_rating=do_rating,
+                do_keywords=do_keywords,
+                progress_callback=lambda done, total: write_progress(
+                    folder, "triaging", done, total
+                ),
+            )
+        except Exception as e:
+            write_progress(folder, "triaging", 0, 0, error=str(e))
+            return
 
-    return redirect(url_for("review", folder=folder))
+        with open(csv_path(folder), "w", newline="") as f:
+            writer = csv.DictWriter(
+                f, fieldnames=["filename", "reject", "rating", "keywords"]
+            )
+            writer.writeheader()
+            writer.writerows(results)
+
+        # Remember what was selected so the review step can default its own
+        # write-time checkboxes to match (with the option to override there).
+        with open(ops_path(folder), "w") as f:
+            json.dump(
+                {"reject": do_reject, "rating": do_rating, "keywords": do_keywords}, f
+            )
+
+        clear_progress(folder)
+
+    threading.Thread(target=run, daemon=True).start()
+    return redirect(url_for("browse", subpath=folder))
 
 
 @app.route("/review/<path:folder>")
@@ -283,4 +376,4 @@ def write(folder):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)

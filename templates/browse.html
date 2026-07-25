@@ -92,6 +92,32 @@
   button:hover, a.btn:hover { background: rgba(217, 143, 43, 0.1); }
   .ready-note { color: var(--muted); font-size: 0.8rem; }
 
+  .progress-wrap { width: 100%; }
+  .progress-label {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+  }
+  .progress-bar {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    height: 0.5rem;
+    overflow: hidden;
+  }
+  .progress-fill {
+    background: var(--amber);
+    height: 100%;
+    transition: width 0.4s ease;
+  }
+  .progress-error {
+    color: var(--red);
+    font-size: 0.8rem;
+    margin-bottom: 0.6rem;
+  }
+
   .folder-list { display: flex; flex-direction: column; gap: 0.5rem; }
   .folder-row {
     display: flex;
@@ -140,8 +166,34 @@
             {{ status }}
           </span>
         </div>
-        <div class="actions">
-          {% if status == 'not started' %}
+        <div class="actions" id="actions">
+          {% if progress %}
+            <div class="progress-wrap" id="progress-wrap">
+              {% if progress.error %}
+                <div class="progress-error">Failed: {{ progress.error }}</div>
+                {% if progress.stage == 'extracting' %}
+                  <form action="{{ url_for('extract', folder=subpath) }}" method="post">
+                    <button type="submit">Try again</button>
+                  </form>
+                {% else %}
+                  <form action="{{ url_for('triage', folder=subpath) }}" method="post">
+                    <input type="hidden" name="ops" value="reject">
+                    <input type="hidden" name="ops" value="rating">
+                    <input type="hidden" name="ops" value="keywords">
+                    <button type="submit">Try again</button>
+                  </form>
+                {% endif %}
+              {% else %}
+                <div class="progress-label">
+                  <span>{{ 'Extracting previews' if progress.stage == 'extracting' else 'Running triage' }}</span>
+                  <span>{{ progress.done }}/{{ progress.total }}</span>
+                </div>
+                <div class="progress-bar">
+                  <div class="progress-fill" style="width: {{ (progress.done / progress.total * 100) if progress.total else 0 }}%"></div>
+                </div>
+              {% endif %}
+            </div>
+          {% elif status == 'not started' %}
             <form action="{{ url_for('extract', folder=subpath) }}" method="post">
               <button type="submit">Extract previews</button>
             </form>
@@ -176,5 +228,30 @@
       <div class="empty">Empty folder.</div>
     {% endif %}
   </div>
+
+  {% if progress and not progress.error %}
+  <script>
+    (function poll() {
+      fetch('{{ url_for("status_route", folder=subpath) }}')
+        .then((r) => r.json())
+        .then((data) => {
+          if (!data.active) {
+            window.location.reload();
+            return;
+          }
+          if (data.error) {
+            window.location.reload();
+            return;
+          }
+          const label = document.querySelector('#progress-wrap .progress-label span:last-child');
+          const fill = document.querySelector('#progress-wrap .progress-fill');
+          if (label) label.textContent = data.done + '/' + data.total;
+          if (fill) fill.style.width = (data.total ? (data.done / data.total * 100) : 0) + '%';
+          setTimeout(poll, 1500);
+        })
+        .catch(() => setTimeout(poll, 3000));
+    })();
+  </script>
+  {% endif %}
 </body>
 </html>

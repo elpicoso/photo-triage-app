@@ -60,10 +60,18 @@ or got removed) — do the manual steps above until/unless it's recreated.
 ## Code layout
 
 - `app.py` — Flask routes: `/browse`, `/extract`, `/triage`, `/review`,
-  `/write`, `/settings`. Status per folder tracked by presence of
-  `_previews/`, `_previews/triage_results.csv`, and `_previews/.written`.
-  RAW extension per folder is auto-detected from what's actually on disk
-  (`detect_raw_ext()`), not hardcoded or form-supplied.
+  `/write`, `/settings`, `/status/<folder>`. Status per folder tracked by
+  presence of `_previews/`, `_previews/triage_results.csv`, and
+  `_previews/.written`. RAW extension per folder is auto-detected from
+  what's actually on disk (`detect_raw_ext()`), not hardcoded or
+  form-supplied. `/extract` and `/triage` kick off a background thread
+  (`threading.Thread`, requires `app.run(..., threaded=True)`) and return
+  immediately rather than blocking the request for the full operation;
+  progress is tracked in `_previews/.progress.json` (done/total/error),
+  polled by `browse.html` via `/status/<folder>` every 1.5s and cleared on
+  success. An error leaves the file behind with an `error` key so the UI
+  can show it with a "Try again" button - `is_active()` treats that as
+  "not running" so retrying is always possible.
 - `metadata.py` — `extract_previews()` (calls exiftool to pull embedded
   JPEG previews from RAW files) and `write_sidecar()` (writes rating/
   keywords into XMP sidecars via exiftool, using fully-qualified tag names:
@@ -81,10 +89,7 @@ or got removed) — do the manual steps above until/unless it's recreated.
   Mac and Pi each keep their own) with env-var-backed defaults for any
   missing key. This is the runtime config used by the Settings page.
 - `templates/browse.html`, `templates/review.html`, `templates/settings.html`,
-  `templates/help.html` — UI. Note: there are stray duplicate copies of
-  `browse.html`/`review.html` sitting in the repo ROOT (not `templates/`)
-  left over from an earlier mistake — harmless (Flask doesn't read them
-  from there) but should be deleted for clarity.
+  `templates/help.html` — UI.
 
 ## Settings page
 
@@ -146,9 +151,6 @@ here before assuming the write step failed.
 
 ## Backlog
 
-- **Feature:** progress indicator in the UI showing extraction/processing
-  progress on files (currently only visible via `journalctl -f` or
-  watching the `_previews` folder fill up).
 - **Feature:** duplicate detection — likely perceptual hashing rather
   than exact-file hashing, since Wade shoots bursts; more Pi compute per
   file, needs its own review UI for flagged duplicates. Not yet designed.
