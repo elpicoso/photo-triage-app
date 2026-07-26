@@ -255,3 +255,7 @@ sudo journalctl -u photo-triage -n 30 --no-pager
   delete a shoot's `_previews/` folder to reset its status back to "not
   started" (the original RAW files and any already-written XMP sidecars
   are untouched).
+
+## License
+
+[MIT](LICENSE) — do whatever you want with it.
