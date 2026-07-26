@@ -10,7 +10,7 @@ keywords into XMP sidecars for Lightroom Classic import.
 - **Repo (edit here):** `/Users/wadecourtney/dev/photo-triage-app` on the Mac
   (username `wadecourtney`). Push to `origin main` on GitHub
   (`elpicoso/photo-triage-app`).
-- **Runs on:** Raspberry Pi at `192.168.1.170`, user `wade`. SSH access is
+- **Runs on:** Raspberry Pi at `<pi-ip>`, user `wade`. SSH access is
   key-based (no password needed).
 - **On the Pi:** working directory `/home/wade/photo-triage-app`, same repo,
   local branch is named `master` but tracks `origin/main` (mismatched names,
@@ -18,7 +18,7 @@ keywords into XMP sidecars for Lightroom Classic import.
 - **Service:** systemd unit `photo-triage`, defined at
   `/etc/systemd/system/photo-triage.service`. Runs
   `venv/bin/python3 app.py` as user `wade`, binds to `0.0.0.0:5000`.
-- **App URL:** `http://192.168.1.170:5000`
+- **App URL:** `http://<pi-ip>:5000`
 - **Photos:** live on Wade's Mac (`Photos and other Documents 1` volume),
   SMB-mounted on the Pi at `/mnt/photos`. The Mac's LAN IP can drift even
   with a DHCP reservation supposedly in place (has happened before,
@@ -45,7 +45,7 @@ keywords into XMP sidecars for Lightroom Classic import.
 
 1. Edit files in the Mac repo.
 2. `git add`, `git commit`, `git push` (pushes to `origin main`).
-3. SSH to the Pi: `ssh wade@192.168.1.170`
+3. SSH to the Pi: `ssh wade@<pi-ip>`
 4. `cd /home/wade/photo-triage-app && git pull`
 5. `sudo systemctl restart photo-triage`
 6. `systemctl status photo-triage` — confirm the "Active since" timestamp is
