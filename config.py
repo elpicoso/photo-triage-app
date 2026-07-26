@@ -10,6 +10,12 @@ DEFAULT_BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "8"))
 DEFAULT_MAX_PREVIEW_DIMENSION = int(os.environ.get("MAX_PREVIEW_DIMENSION", "1568"))
 DEFAULT_RAW_EXTENSIONS = ["cr2", "cr3", "nef", "arw", "raf", "dng", "orf", "rw2"]
 
+# Hamming-distance cutoff (out of 64 bits) for grouping two previews as
+# near-duplicates in dedupe.group_duplicates() - lower means stricter
+# (fewer false groupings), higher means looser (catches more, but risks
+# grouping genuinely different shots).
+DEFAULT_DUPLICATE_THRESHOLD = int(os.environ.get("DUPLICATE_THRESHOLD", "5"))
+
 # The framing/genre sentence in the triage prompt (see triage.build_prompt())
 # - e.g. swap to "a wedding" or "a corporate headshot session" for shoots
 # that aren't landscape/astro.
@@ -52,6 +58,9 @@ def load_settings():
             e.lower() for e in overrides.get("raw_extensions", DEFAULT_RAW_EXTENSIONS)
         ),
         "shoot_context": overrides.get("shoot_context", DEFAULT_SHOOT_CONTEXT),
+        "duplicate_threshold": overrides.get(
+            "duplicate_threshold", DEFAULT_DUPLICATE_THRESHOLD
+        ),
         "reject_criteria": overrides.get("reject_criteria", DEFAULT_REJECT_CRITERIA),
         "rating_criteria": overrides.get("rating_criteria", DEFAULT_RATING_CRITERIA),
         "keyword_criteria": overrides.get("keyword_criteria", DEFAULT_KEYWORD_CRITERIA),

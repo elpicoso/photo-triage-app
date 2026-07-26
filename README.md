@@ -90,6 +90,7 @@ each install/machine keeps its own):
 | Batch size (images per API call) | `BATCH_SIZE` | `8` |
 | Max preview dimension (px, before sending to the API) | `MAX_PREVIEW_DIMENSION` | `1568` |
 | Shoot context, reject/rating/keyword criteria | — | landscape/astro-tuned defaults |
+| Duplicate threshold (Hamming distance, 0-64) | `DUPLICATE_THRESHOLD` | `5` |
 
 `ANTHROPIC_API_KEY` is deliberately **not** on the Settings page — it's a
 secret, and the Settings page is reachable by anyone who can reach the
@@ -107,14 +108,24 @@ it's auto-detected from whatever's actually in the folder.
 2. **Extract previews** — pulls the embedded JPEG preview out of each RAW
    file via `exiftool`. Runs in the background with a live progress bar;
    no need to watch logs or refresh.
-3. **Run triage** — choose which of Flag rejects / Rate / Keyword you want
-   for this folder, then sends batches of preview JPEGs to the Claude API.
-   Also runs in the background with a progress bar. If a batch fails
-   (network hiccup, rate limit), the folder's progress panel shows the
-   error with a **Try again** button instead of hanging.
+3. **Run triage** — choose which of Flag rejects / Rate / Keyword / Detect
+   duplicates you want for this folder, then sends batches of preview
+   JPEGs to the Claude API. Also runs in the background with a progress
+   bar. If a batch fails (network hiccup, rate limit), the folder's
+   progress panel shows the error with a **Try again** button instead of
+   hanging. If Detect duplicates is checked, near-identical burst shots
+   are grouped locally first (free, no API call) and only the sharpest
+   frame per group is sent to Claude — the rest are pre-flagged as
+   rejects.
 4. **Review results** — an editable table of every file's suggested
    reject/rating/keywords. Fix anything before writing — this is the
-   checkpoint that catches anything Claude got wrong.
+   checkpoint that catches anything Claude got wrong. Rows in a duplicate
+   group show a thumbnail, a sharpness score, and which one was
+   auto-picked as "kept" — click **Use this instead** on any other member
+   to swap which one gets kept before writing. The sharpness pick is a
+   best-effort heuristic (most reliable within a same-exposure burst,
+   less so across a wide exposure bracket), which is exactly why this
+   swap exists — don't trust it blindly on anything that matters.
 5. **Write to XMP** — writes your (possibly edited) choices into XMP
    sidecar files next to each RAW, using fully-qualified tag names
    (`XMP-xmp:Rating`, `XMP-dc:Subject`) so they land where Lightroom
@@ -145,6 +156,26 @@ The Settings page has an **Evaluation criteria** section with:
 Only the field-name prefix and the JSON response format are fixed in the
 prompt, so editing these can tune behavior but can't break the response
 parsing.
+
+## Duplicate detection
+
+Checking **Detect duplicates** at triage time groups near-identical
+previews (via perceptual hashing — tolerant of exposure differences, so
+a bracketed sequence groups together, but sensitive to genuine
+compositional differences) before anything is sent to Claude. Only the
+sharpest frame per group goes to Claude for full triage; the rest are
+marked as rejects with no API call, saving cost on bursts.
+
+**Duplicate threshold** (Settings page, default `5` out of `64`) controls
+how similar two previews must be to count as a group — lower is stricter
+(fewer, more confident groupings), higher is looser.
+
+The "which frame is sharpest" pick is a local heuristic, not a Claude
+judgment — reliable within a same-exposure continuous-shooting burst,
+less so across a deliberately bracketed exposure sequence. That's why the
+review page shows a thumbnail, a sharpness score, and a one-click
+**Use this instead** button for every duplicate group — treat the
+auto-pick as a starting guess, not a final answer.
 
 ## Optional: mounting a remote photo share
 

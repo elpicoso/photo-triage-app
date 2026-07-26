@@ -95,6 +95,34 @@
   }
   button:hover { background: #eba447; }
   .note { color: var(--muted); font-size: 0.78rem; }
+
+  .thumb {
+    width: 64px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    display: block;
+  }
+  .group-badge {
+    display: block;
+    margin-top: 0.3rem;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+  .group-badge .kept { color: var(--amber); }
+  .group-badge button {
+    background: transparent;
+    border: 1px solid var(--amber-dim);
+    color: var(--amber);
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: 400;
+    cursor: pointer;
+    margin-left: 0.3rem;
+  }
+  .group-badge button:hover { background: rgba(217, 143, 43, 0.1); }
 </style>
 </head>
 <body>
@@ -114,6 +142,7 @@
       <table>
         <thead>
           <tr>
+            <th></th>
             <th>File</th>
             <th>Reject</th>
             <th>Rating</th>
@@ -122,10 +151,24 @@
         </thead>
         <tbody>
           {% for row in rows %}
-          <tr class="{{ 'rejected' if row.reject == 'yes' else '' }}">
+          <tr class="{{ 'rejected' if row.reject == 'yes' else '' }}"
+              {% if row.group %}data-group="{{ row.group.representative }}" data-filename="{{ row.filename }}"{% endif %}>
+            <td>
+              <img class="thumb" src="{{ url_for('preview_image', folder=folder, filename=row.filename) }}" loading="lazy" alt="">
+            </td>
             <td class="filename">
               {{ row.filename }}
               <input type="hidden" name="filename" value="{{ row.filename }}">
+              {% if row.group %}
+                <span class="group-badge">
+                  {% if row.filename == row.group.representative %}
+                    <span class="kept">kept</span> &middot; group of {{ row.group.members|length }} &middot; sharpness {{ row.group.sharpness }}
+                  {% else %}
+                    duplicate of {{ row.group.representative }} &middot; sharpness {{ row.group.sharpness }}
+                    <button type="button" onclick="makeKeeper('{{ row.group.representative }}', '{{ row.filename }}')">Use this instead</button>
+                  {% endif %}
+                </span>
+              {% endif %}
             </td>
             <td>
               <select name="reject">
@@ -150,5 +193,14 @@
       </div>
     </form>
   </div>
+
+  <script>
+    function makeKeeper(groupId, filename) {
+      document.querySelectorAll('tr[data-group="' + CSS.escape(groupId) + '"]').forEach(function (tr) {
+        const select = tr.querySelector('select[name="reject"]');
+        select.value = (tr.dataset.filename === filename) ? 'no' : 'yes';
+      });
+    }
+  </script>
 </body>
 </html>

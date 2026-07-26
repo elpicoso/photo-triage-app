@@ -119,7 +119,7 @@
       <div class="step-num">3</div>
       <div class="step-body">
         <h3>Run triage</h3>
-        <p>Sends the extracted previews to Claude in small batches to flag technical rejects, assign star ratings, and generate keywords.</p>
+        <p>Sends the extracted previews to Claude in small batches to flag technical rejects, assign star ratings, and generate keywords. If Detect duplicates is checked, near-identical burst shots are grouped first (locally, no API cost) and only the sharpest of each group is sent to Claude — the rest are pre-flagged as rejects, overridable in the next step.</p>
         <span class="status-tag">triaged - needs review</span>
       </div>
     </div>
@@ -128,7 +128,7 @@
       <div class="step-num">4</div>
       <div class="step-body">
         <h3>Review results</h3>
-        <p>Click through to the editable table. Check ratings and keywords against the actual images before submitting — this is the checkpoint that catches anything Claude got wrong before it's written anywhere permanent.</p>
+        <p>Click through to the editable table. Check ratings and keywords against the actual images before submitting — this is the checkpoint that catches anything Claude got wrong before it's written anywhere permanent. Rows in a duplicate group show a thumbnail, a sharpness score, and a "duplicate of" badge — the one auto-picked as sharpest is marked "kept"; click "Use this instead" on any other member to swap which one gets kept.</p>
       </div>
     </div>
 

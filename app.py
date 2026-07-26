@@ -4,9 +4,10 @@ import os
 import threading
 from collections import Counter
 
-from flask import Flask, render_template, request, redirect, url_for, abort
+from flask import Flask, render_template, request, redirect, url_for, abort, send_file
 
 from config import load_settings, save_settings
+from dedupe import group_duplicates
 from metadata import extract_previews, write_sidecar
 from triage import triage_folder
 
@@ -33,6 +34,10 @@ def csv_path(folder):
 
 def ops_path(folder):
     return os.path.join(preview_dir(folder), ".ops.json")
+
+
+def duplicates_path(folder):
+    return os.path.join(preview_dir(folder), ".duplicates.json")
 
 
 def written_marker(folder):
@@ -215,9 +220,11 @@ def settings_page():
             try:
                 batch_size = int(form.get("batch_size", ""))
                 max_preview_dimension = int(form.get("max_preview_dimension", ""))
+                duplicate_threshold = int(form.get("duplicate_threshold", ""))
             except ValueError:
                 raise ValueError(
-                    "Batch size and max preview dimension must be whole numbers"
+                    "Batch size, max preview dimension, and duplicate threshold "
+                    "must be whole numbers"
                 )
 
             new_settings = {
@@ -234,6 +241,7 @@ def settings_page():
                 "reject_criteria": form.get("reject_criteria", "").strip(),
                 "rating_criteria": form.get("rating_criteria", "").strip(),
                 "keyword_criteria": form.get("keyword_criteria", "").strip(),
+                "duplicate_threshold": duplicate_threshold,
             }
             if not new_settings["raw_root"] or not new_settings["triage_model"]:
                 raise ValueError("RAW root and triage model can't be empty")
@@ -241,6 +249,8 @@ def settings_page():
                 raise ValueError("Batch size must be a positive number")
             if max_preview_dimension < 1:
                 raise ValueError("Max preview dimension must be a positive number")
+            if not (0 <= duplicate_threshold <= 64):
+                raise ValueError("Duplicate threshold must be between 0 and 64")
             if not new_settings["raw_extensions"]:
                 raise ValueError("At least one RAW extension is required")
             if not new_settings["shoot_context"]:
@@ -273,6 +283,7 @@ def settings_page():
         "reject_criteria": current["reject_criteria"],
         "rating_criteria": current["rating_criteria"],
         "keyword_criteria": current["keyword_criteria"],
+        "duplicate_threshold": current["duplicate_threshold"],
     }
     return render_template(
         "settings.html", values=values, saved=request.args.get("saved"), error=None
@@ -320,16 +331,30 @@ def triage(folder):
     do_reject = "reject" in selected_ops
     do_rating = "rating" in selected_ops
     do_keywords = "keywords" in selected_ops
+    do_duplicates = "duplicates" in selected_ops
 
     write_progress(folder, "triaging", 0, 0)
 
     def run():
         try:
+            duplicate_groups = None
+            if do_duplicates:
+                threshold = load_settings()["duplicate_threshold"]
+                duplicate_groups = group_duplicates(preview_dir(folder), threshold)
+                with open(duplicates_path(folder), "w") as f:
+                    json.dump(duplicate_groups, f)
+            elif os.path.exists(duplicates_path(folder)):
+                # A previous run found groups but this run doesn't want
+                # dedup applied - clear stale grouping data so the review
+                # page doesn't show groups that no longer apply.
+                os.remove(duplicates_path(folder))
+
             results = triage_folder(
                 preview_dir(folder),
                 do_reject=do_reject,
                 do_rating=do_rating,
                 do_keywords=do_keywords,
+                duplicate_groups=duplicate_groups,
                 progress_callback=lambda done, total: write_progress(
                     folder, "triaging", done, total
                 ),
@@ -340,7 +365,8 @@ def triage(folder):
 
         with open(csv_path(folder), "w", newline="") as f:
             writer = csv.DictWriter(
-                f, fieldnames=["filename", "reject", "rating", "keywords"]
+                f,
+                fieldnames=["filename", "reject", "rating", "keywords", "duplicate_of"],
             )
             writer.writeheader()
             writer.writerows(results)
@@ -349,7 +375,13 @@ def triage(folder):
         # write-time checkboxes to match (with the option to override there).
         with open(ops_path(folder), "w") as f:
             json.dump(
-                {"reject": do_reject, "rating": do_rating, "keywords": do_keywords}, f
+                {
+                    "reject": do_reject,
+                    "rating": do_rating,
+                    "keywords": do_keywords,
+                    "duplicates": do_duplicates,
+                },
+                f,
             )
 
         clear_progress(folder)
@@ -368,7 +400,36 @@ def review(folder):
         with open(ops_path(folder)) as f:
             ops.update(json.load(f))
 
+    # Attach group info (for the thumbnail/badge/swap UI) to each row that's
+    # part of a duplicate group - None for rows that aren't.
+    group_by_filename = {}
+    if os.path.exists(duplicates_path(folder)):
+        with open(duplicates_path(folder)) as f:
+            duplicate_groups = json.load(f)
+        for representative, info in duplicate_groups.items():
+            for member in info["members"]:
+                group_by_filename[member] = {
+                    "representative": representative,
+                    "members": info["members"],
+                    "sharpness": round(info["sharpness"][member], 1),
+                }
+    for row in rows:
+        row["group"] = group_by_filename.get(row["filename"])
+
     return render_template("review.html", folder=folder, rows=rows, ops=ops)
+
+
+@app.route("/preview/<path:folder>/<filename>")
+def preview_image(folder, filename):
+    """Serves a single extracted preview JPEG for the <img> thumbnails on
+    the review page. Not scoped by safe_path() (that resolves RAW-folder
+    paths) - instead resolves directly under this folder's own preview
+    directory and refuses to escape it, same pattern as safe_path()."""
+    pdir = preview_dir(folder)
+    target = os.path.normpath(os.path.join(pdir, filename))
+    if not (target == pdir or target.startswith(pdir + os.sep)) or not os.path.isfile(target):
+        abort(404)
+    return send_file(target, mimetype="image/jpeg")
 
 
 @app.route("/write/<path:folder>", methods=["POST"])

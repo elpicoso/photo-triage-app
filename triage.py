@@ -123,8 +123,14 @@ def triage_folder(
     do_reject=True,
     do_rating=True,
     do_keywords=True,
+    duplicate_groups=None,
     progress_callback=None,
 ):
+    """duplicate_groups, if given, is dedupe.group_duplicates()'s output:
+    {representative_filename: {"members": [...], ...}}. Every group member
+    except the representative is skipped from Claude entirely (no API
+    call, reject defaults to "yes") - the representative is the only one
+    evaluated normally alongside whatever else isn't part of any group."""
     images = sorted(
         os.path.join(preview_dir, f)
         for f in os.listdir(preview_dir)
@@ -132,22 +138,36 @@ def triage_folder(
     )
     total = len(images)
 
+    duplicate_of = {}
+    if duplicate_groups:
+        for representative, info in duplicate_groups.items():
+            for member in info["members"]:
+                if member != representative:
+                    duplicate_of[member] = representative
+
     if not (do_reject or do_rating or do_keywords):
         # Nothing selected - skip the API entirely, return empty rows
         # so the review table still lists every file.
         if progress_callback:
             progress_callback(total, total)
         return [
-            {"filename": os.path.basename(p), "reject": "", "rating": "", "keywords": ""}
+            {
+                "filename": os.path.basename(p),
+                "reject": "",
+                "rating": "",
+                "keywords": "",
+                "duplicate_of": duplicate_of.get(os.path.basename(p), ""),
+            }
             for p in images
         ]
 
+    to_send = [p for p in images if os.path.basename(p) not in duplicate_of]
     batch_size = batch_size or load_settings()["batch_size"]
     results = []
     if progress_callback:
         progress_callback(0, total)
-    for i in range(0, len(images), batch_size):
-        batch = images[i : i + batch_size]
+    for i in range(0, len(to_send), batch_size):
+        batch = to_send[i : i + batch_size]
         try:
             results.extend(
                 triage_batch(batch, do_reject=do_reject, do_rating=do_rating, do_keywords=do_keywords)
@@ -165,5 +185,30 @@ def triage_folder(
                     }
                 )
         if progress_callback:
-            progress_callback(len(results), total)
+            # duplicates are skipped work, not pending work - count them as
+            # already "done" so the bar doesn't stall short of 100%.
+            progress_callback(len(results) + len(duplicate_of), total)
+
+    for row in results:
+        row.setdefault("duplicate_of", "")
+
+    # Synthesize rows for skipped duplicates - no API call, reject=yes by
+    # default (still overridable in the review step, same as any other row).
+    for path in images:
+        fname = os.path.basename(path)
+        if fname in duplicate_of:
+            results.append(
+                {
+                    "filename": fname,
+                    "reject": "yes",
+                    "rating": "",
+                    "keywords": "",
+                    "duplicate_of": duplicate_of[fname],
+                }
+            )
+
+    if progress_callback:
+        progress_callback(total, total)
+
+    results.sort(key=lambda r: r["filename"])
     return results

@@ -60,18 +60,20 @@ or got removed) — do the manual steps above until/unless it's recreated.
 ## Code layout
 
 - `app.py` — Flask routes: `/browse`, `/extract`, `/triage`, `/review`,
-  `/write`, `/settings`, `/status/<folder>`. Status per folder tracked by
-  presence of `_previews/`, `_previews/triage_results.csv`, and
-  `_previews/.written`. RAW extension per folder is auto-detected from
-  what's actually on disk (`detect_raw_ext()`), not hardcoded or
-  form-supplied. `/extract` and `/triage` kick off a background thread
-  (`threading.Thread`, requires `app.run(..., threaded=True)`) and return
-  immediately rather than blocking the request for the full operation;
-  progress is tracked in `_previews/.progress.json` (done/total/error),
-  polled by `browse.html` via `/status/<folder>` every 1.5s and cleared on
-  success. An error leaves the file behind with an `error` key so the UI
-  can show it with a "Try again" button - `is_active()` treats that as
-  "not running" so retrying is always possible.
+  `/write`, `/settings`, `/status/<folder>`, `/preview/<folder>/<filename>`.
+  Status per folder tracked by presence of `_previews/`,
+  `_previews/triage_results.csv`, and `_previews/.written`. RAW extension
+  per folder is auto-detected from what's actually on disk
+  (`detect_raw_ext()`), not hardcoded or form-supplied. `/extract` and
+  `/triage` kick off a background thread (`threading.Thread`, requires
+  `app.run(..., threaded=True)`) and return immediately rather than
+  blocking the request for the full operation; progress is tracked in
+  `_previews/.progress.json` (done/total/error), polled by `browse.html`
+  via `/status/<folder>` every 1.5s and cleared on success. An error
+  leaves the file behind with an `error` key so the UI can show it with a
+  "Try again" button - `is_active()` treats that as "not running" so
+  retrying is always possible. `/preview/<folder>/<filename>` serves a
+  single extracted preview JPEG for the review page's thumbnails.
 - `metadata.py` — `extract_previews()` (calls exiftool to pull embedded
   JPEG previews from RAW files) and `write_sidecar()` (writes rating/
   keywords into XMP sidecars via exiftool, using fully-qualified tag names:
@@ -84,22 +86,41 @@ or got removed) — do the manual steps above until/unless it's recreated.
   `config.load_settings()`) in batches to get reject/rating/keyword
   suggestions per image. Preview JPEGs are downscaled (Pillow) to
   `max_preview_dimension` before being base64-encoded and sent.
+  `triage_folder()` accepts a `duplicate_groups` param (see `dedupe.py`
+  below) - non-representative group members are skipped entirely (no API
+  call, `reject` defaults to `"yes"`, `duplicate_of` set to the
+  representative's filename).
+- `dedupe.py` — burst/near-duplicate detection, pure Pillow (no numpy/scipy
+  dependency). `compute_dhash()` is a difference hash (compares adjacent
+  pixel gradients, not absolute brightness) so it tolerates exposure
+  differences across a bracket sequence while still distinguishing a
+  genuinely different composition. `group_duplicates()` clusters previews
+  via Union-Find over pairwise Hamming distance ≤ `duplicate_threshold`,
+  then picks the sharpest member of each group (`sharpness_score()` -
+  edge-map variance normalized by the image's own pixel variance, to
+  reduce - not eliminate - sensitivity to exposure/contrast differences)
+  as the representative sent to Claude. This is a best-effort heuristic,
+  not a final judgment - see the review page's swap control below.
 - `config.py` — `load_settings()` / `save_settings()`: reads/writes
   `settings.json` (gitignored, lives next to `app.py`, one per machine —
   Mac and Pi each keep their own) with env-var-backed defaults for any
   missing key. This is the runtime config used by the Settings page.
 - `templates/browse.html`, `templates/review.html`, `templates/settings.html`,
-  `templates/help.html` — UI.
+  `templates/help.html` — UI. `review.html` shows a thumbnail per row
+  (via `/preview/...`) and, for rows in a duplicate group, a sharpness
+  score and a "Use this instead" button that reassigns which group member
+  is "kept" (client-side only - just flips the Reject dropdowns for every
+  row sharing that group, same as manually editing them).
 
 ## Settings page
 
 `/settings` lets you edit `raw_root`, `raw_extensions`, `triage_model`,
-`batch_size`, `max_preview_dimension`, `shoot_context`, and the three
+`batch_size`, `max_preview_dimension`, `shoot_context`, the three
 evaluation criteria (`reject_criteria`, `rating_criteria`,
-`keyword_criteria`) from the browser — writes to `settings.json`, takes
-effect on the next request, no restart needed. `ANTHROPIC_API_KEY` is
-deliberately NOT here (see Infrastructure above) — it stays secret-only,
-in the systemd unit file.
+`keyword_criteria`), and `duplicate_threshold` from the browser — writes
+to `settings.json`, takes effect on the next request, no restart needed.
+`ANTHROPIC_API_KEY` is deliberately NOT here (see Infrastructure above) —
+it stays secret-only, in the systemd unit file.
 
 `shoot_context` is the one-line genre framing ("a landscape/astrophotography
 shoot" by default) in the triage prompt — this repo started as
@@ -150,6 +171,17 @@ field it's still being asked to fill in.
   This is intentional (confirmed with Wade): reject is a binary, permanent
   judgment, not something worth selectively skipping at write time the
   way you might skip keywords for speed.
+- `dedupe.sharpness_score()`'s representative pick is a best-effort proxy,
+  not a reliable judgment — verified during testing that it correctly
+  ranks sharp > blurry within a same-exposure burst, but a synthetic
+  wide-exposure-bracket test showed the metric can be fooled by
+  contrast/brightness differences (a brighter frame can score "sharper"
+  at identical focus). This is a known, accepted limitation (confirmed
+  with Wade - he culls astro manually and doesn't burst-shoot it, so the
+  main risk case doesn't come up in practice) rather than something to
+  "fix" - it's exactly why the review page shows thumbnails, a sharpness
+  score, and a one-click "Use this instead" swap instead of trusting the
+  auto-pick silently.
 
 ## Lightroom import gotcha
 

@@ -265,6 +265,12 @@
         <span class="hint">Sent verbatim as the "keywords:" instruction when Keyword is selected at triage time.</span>
       </div>
 
+      <div class="field">
+        <label for="duplicate_threshold">Duplicate threshold</label>
+        <input type="number" id="duplicate_threshold" name="duplicate_threshold" min="0" max="64" value="{{ values.duplicate_threshold }}">
+        <span class="hint">How similar two previews must be (out of 64) to count as near-duplicates when Detect duplicates is selected at triage time. Lower = stricter (fewer, more confident groupings); higher = looser (catches more, but risks grouping genuinely different shots). Default 5.</span>
+      </div>
+
       <button type="submit">Save</button>
     </form>
 
