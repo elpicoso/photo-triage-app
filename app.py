@@ -8,7 +8,13 @@ from flask import Flask, render_template, request, redirect, url_for, abort, sen
 
 from config import load_settings, save_settings
 from dedupe import group_duplicates
-from metadata import extract_previews, write_sidecar
+from metadata import (
+    extract_previews,
+    list_raw_files,
+    missing_previews,
+    raw_files_by_stem,
+    write_sidecar,
+)
 from triage import triage_folder
 
 app = Flask(__name__)
@@ -85,38 +91,88 @@ def is_active(folder):
     return progress is not None and "error" not in progress
 
 
-def get_status(folder):
+def raw_extensions():
+    return load_settings()["raw_extensions"]
+
+
+def completed_path(folder):
+    return os.path.join(preview_dir(folder), ".completed.json")
+
+
+def csv_filenames(folder):
+    """Preview filenames in the current triage results (empty if none)."""
+    if not os.path.exists(csv_path(folder)):
+        return set()
+    with open(csv_path(folder), newline="") as f:
+        return {row["filename"] for row in csv.DictReader(f)}
+
+
+def read_completed(folder):
+    """Preview filenames whose XMP sidecar has already been written.
+
+    This ledger is what lets a folder be re-run for new files without
+    re-triaging or re-writing the finished ones - rewriting would overwrite
+    sidecars with stale values, including any change made in Lightroom
+    since. Folders finished before the ledger existed only have a folder-
+    wide .written marker; for those, everything in their last triage run
+    counts as done."""
+    path = completed_path(folder)
+    if os.path.exists(path):
+        with open(path) as f:
+            return set(json.load(f))
     if os.path.exists(written_marker(folder)):
-        return "written"
-    if os.path.exists(csv_path(folder)):
-        return "triaged - needs review"
-    if os.path.isdir(preview_dir(folder)):
-        return "extracted"
-    return "not started"
+        return csv_filenames(folder)
+    return set()
 
 
-def detect_raw_ext(path):
-    """Look at what's actually on disk rather than trusting a hardcoded
-    default - a folder full of .CR3 files with a form defaulting to "CR2"
-    causes /write to silently skip every row, since raw_path then never
-    matches a real file. Picks the most common RAW extension present."""
-    raw_extensions = load_settings()["raw_extensions"]
+def add_completed(folder, filenames):
+    done = read_completed(folder) | set(filenames)
+    path = completed_path(folder)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(sorted(done), f)
+    os.replace(tmp, path)
+
+
+def migrate_legacy_ledger(folder):
+    """Materialize the ledger from a legacy .written marker *before* the
+    triage results CSV gets replaced - read_completed()'s legacy fallback
+    reads that CSV, so it would otherwise start treating new rows as done."""
+    if not os.path.exists(completed_path(folder)):
+        add_completed(folder, [])
+
+
+def preview_names(folder):
     try:
-        counts = Counter(
-            f.rsplit(".", 1)[1].upper()
-            for f in os.listdir(path)
-            if "." in f and f.rsplit(".", 1)[1].lower() in raw_extensions
-        )
-    except (FileNotFoundError, NotADirectoryError, PermissionError):
-        return None
-    if not counts:
-        return None
-    return counts.most_common(1)[0][0]
+        return {
+            f
+            for f in os.listdir(preview_dir(folder))
+            if f.lower().endswith(".jpg") and not f.startswith(".")
+        }
+    except FileNotFoundError:
+        return set()
+
+
+def pending_previews(folder):
+    """Extracted previews whose sidecar hasn't been written yet."""
+    return preview_names(folder) - read_completed(folder)
+
+
+def get_status(folder):
+    previews = preview_names(folder)
+    if not previews:
+        return "not started"
+    pending = previews - read_completed(folder)
+    if not pending:
+        return "written"
+    if pending <= csv_filenames(folder):
+        return "triaged - needs review"
+    return "extracted"
 
 
 def is_shoot_folder(path):
     """True if this folder directly contains RAW files."""
-    return detect_raw_ext(path) is not None
+    return bool(list_raw_files(path, raw_extensions()))
 
 
 def api_key_configured():
@@ -159,6 +215,19 @@ def browse(subpath=""):
     status = get_status(subpath) if is_shoot else None
     progress = read_progress(subpath) if is_shoot else None
 
+    # RAW files that have no preview yet (a new camera body's files, or
+    # photos copied in after the first extract) - offered as "extract the
+    # rest" without redoing what's done.
+    unextracted = []
+    if is_shoot and status != "not started":
+        unextracted = missing_previews(
+            current_dir, preview_dir(subpath), raw_extensions()
+        )
+    unextracted_summary = ", ".join(
+        f"{n} {ext.upper()}"
+        for ext, n in Counter(f.rsplit(".", 1)[1].lower() for f in unextracted).most_common()
+    )
+
     return render_template(
         "browse.html",
         subpath=subpath,
@@ -167,6 +236,8 @@ def browse(subpath=""):
         is_shoot=is_shoot,
         status=status,
         progress=progress,
+        unextracted_count=len(unextracted),
+        unextracted_summary=unextracted_summary,
         raw_root=load_settings()["raw_root"],
         api_key_configured=api_key_configured(),
     )
@@ -296,19 +367,20 @@ def extract(folder):
         return redirect(url_for("browse", subpath=folder))
 
     raw_dir = safe_path(folder)
-    raw_ext = detect_raw_ext(raw_dir)
-    if raw_ext is None:
+    extensions = raw_extensions()
+    if not list_raw_files(raw_dir, extensions):
         abort(400, "No RAW files found in this folder")
 
     os.makedirs(preview_dir(folder), exist_ok=True)
-    write_progress(folder, "extracting", 0, 0)
+    todo = missing_previews(raw_dir, preview_dir(folder), extensions)
+    write_progress(folder, "extracting", 0, len(todo))
 
     def run():
         try:
             extract_previews(
                 raw_dir,
                 preview_dir(folder),
-                raw_ext,
+                extensions,
                 progress_callback=lambda done, total: write_progress(
                     folder, "extracting", done, total
                 ),
@@ -333,14 +405,23 @@ def triage(folder):
     do_keywords = "keywords" in selected_ops
     do_duplicates = "duplicates" in selected_ops
 
-    write_progress(folder, "triaging", 0, 0)
+    # Only photos not already written - a re-run for new files must not
+    # re-triage (or later re-write) the finished ones.
+    pending = pending_previews(folder)
+    if not pending:
+        return redirect(url_for("browse", subpath=folder))
+
+    write_progress(folder, "triaging", 0, len(pending))
 
     def run():
         try:
+            migrate_legacy_ledger(folder)
             duplicate_groups = None
             if do_duplicates:
                 threshold = load_settings()["duplicate_threshold"]
-                duplicate_groups = group_duplicates(preview_dir(folder), threshold)
+                duplicate_groups = group_duplicates(
+                    preview_dir(folder), threshold, only=pending
+                )
                 with open(duplicates_path(folder), "w") as f:
                     json.dump(duplicate_groups, f)
             elif os.path.exists(duplicates_path(folder)):
@@ -355,6 +436,7 @@ def triage(folder):
                 do_rating=do_rating,
                 do_keywords=do_keywords,
                 duplicate_groups=duplicate_groups,
+                only=pending,
                 progress_callback=lambda done, total: write_progress(
                     folder, "triaging", done, total
                 ),
@@ -392,8 +474,9 @@ def triage(folder):
 
 @app.route("/review/<path:folder>")
 def review(folder):
+    completed = read_completed(folder)
     with open(csv_path(folder), newline="") as f:
-        rows = list(csv.DictReader(f))
+        rows = [r for r in csv.DictReader(f) if r["filename"] not in completed]
 
     ops = {"reject": True, "rating": True, "keywords": True}
     if os.path.exists(ops_path(folder)):
@@ -447,8 +530,8 @@ def write(folder):
         return redirect(url_for("browse", subpath=folder))
 
     raw_dir = safe_path(folder)
-    raw_ext = detect_raw_ext(raw_dir)
-    if raw_ext is None:
+    by_stem, _ = raw_files_by_stem(raw_dir, raw_extensions())
+    if not by_stem:
         abort(400, "No RAW files found in this folder")
 
     write_ops = request.form.getlist("ops")
@@ -463,9 +546,12 @@ def write(folder):
         request.form.getlist("rating"),
         request.form.getlist("keywords"),
     ):
-        raw_path = os.path.join(raw_dir, filename.replace(".jpg", f".{raw_ext}"))
-        if not os.path.exists(raw_path):
+        # Resolve the RAW by name stem from what's actually in the folder,
+        # whatever its extension - and never from a path in the form.
+        raw_name = by_stem.get(os.path.splitext(os.path.basename(filename))[0])
+        if raw_name is None:
             continue
+        raw_path = os.path.join(raw_dir, raw_name)
         jobs.append(
             (
                 filename,
@@ -480,15 +566,22 @@ def write(folder):
     write_progress(folder, "writing", 0, total)
 
     def run():
+        written = []
+        filename = "(setup)"
         try:
+            migrate_legacy_ledger(folder)
             for done, (filename, raw_path, rating, reject, keywords) in enumerate(jobs):
                 write_sidecar(raw_path, rating=rating, reject=reject, keywords=keywords)
+                written.append(filename)
                 write_progress(folder, "writing", done + 1, total)
+                if len(written) % 25 == 0:
+                    add_completed(folder, written)
         except Exception as e:
-            write_progress(folder, "writing", done, total, error=f"{filename}: {e}")
+            add_completed(folder, written)
+            write_progress(folder, "writing", len(written), total, error=f"{filename}: {e}")
             return
 
-        open(written_marker(folder), "w").close()
+        add_completed(folder, written)
         clear_progress(folder)
 
     threading.Thread(target=run, daemon=True).start()

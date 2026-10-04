@@ -43,17 +43,21 @@ def sharpness_score(image_path):
         return edge_variance / (own_variance + 1e-6)
 
 
-def group_duplicates(preview_dir, threshold):
+def group_duplicates(preview_dir, threshold, only=None):
     """Groups near-duplicate previews via pairwise dHash distance (Union-Find
     over pairs within threshold), then within each group of size > 1 picks
     the sharpest member as the representative - the only one that should be
     sent to Claude for full triage.
 
+    only, if given, restricts grouping to those filenames.
+
     Returns {representative_filename: {"members": [...], "sharpness": {filename: score}}}
     for every group with more than one member. Filenames not in any key's
     "members" list are not part of a duplicate group."""
     filenames = sorted(
-        f for f in os.listdir(preview_dir) if f.lower().endswith(".jpg")
+        f
+        for f in os.listdir(preview_dir)
+        if f.lower().endswith(".jpg") and (only is None or f in only)
     )
     hashes = {f: compute_dhash(os.path.join(preview_dir, f)) for f in filenames}
 

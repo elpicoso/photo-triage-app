@@ -118,6 +118,19 @@
     margin-bottom: 0.6rem;
   }
 
+  .more-raws {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 0.9rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--line);
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .more-raws strong { color: var(--text); }
   .api-key-warning {
     background: rgba(184, 73, 58, 0.1);
     border: 1px solid var(--red);
@@ -240,6 +253,15 @@
             <span class="ready-note">Ready for Lightroom import</span>
           {% endif %}
         </div>
+        {% if unextracted_count and not progress %}
+          <div class="more-raws">
+            <span><strong>{{ unextracted_count }} more RAW file{{ '' if unextracted_count == 1 else 's' }}</strong>
+              ({{ unextracted_summary }}) in this folder haven't been extracted yet. Files already done are left alone.</span>
+            <form action="{{ url_for('extract', folder=subpath) }}" method="post">
+              <button type="submit">Extract the rest</button>
+            </form>
+          </div>
+        {% endif %}
       </div>
     {% endif %}
 

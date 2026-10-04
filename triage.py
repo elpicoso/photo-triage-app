@@ -125,8 +125,13 @@ def triage_folder(
     do_keywords=True,
     duplicate_groups=None,
     progress_callback=None,
+    only=None,
 ):
-    """duplicate_groups, if given, is dedupe.group_duplicates()'s output:
+    """only, if given, restricts the run to those preview filenames (the
+    ones not already written - see app.pending_previews()), so re-running a
+    folder doesn't re-triage photos that are done.
+
+    duplicate_groups, if given, is dedupe.group_duplicates()'s output:
     {representative_filename: {"members": [...], ...}}. Every group member
     except the representative is skipped from Claude entirely (no API
     call, reject defaults to "yes") - the representative is the only one
@@ -134,7 +139,7 @@ def triage_folder(
     images = sorted(
         os.path.join(preview_dir, f)
         for f in os.listdir(preview_dir)
-        if f.lower().endswith(".jpg")
+        if f.lower().endswith(".jpg") and (only is None or f in only)
     )
     total = len(images)
 

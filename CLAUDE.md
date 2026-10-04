@@ -61,10 +61,20 @@ or got removed) — do the manual steps above until/unless it's recreated.
 
 - `app.py` — Flask routes: `/browse`, `/extract`, `/triage`, `/review`,
   `/write`, `/settings`, `/status/<folder>`, `/preview/<folder>/<filename>`.
-  Status per folder tracked by presence of `_previews/`,
-  `_previews/triage_results.csv`, and `_previews/.written`. RAW extension
-  per folder is auto-detected from what's actually on disk
-  (`detect_raw_ext()`), not hardcoded or form-supplied. `/extract` and
+  Status per folder is derived from `_previews/` contents, the current
+  `triage_results.csv`, and a ledger of already-written photos
+  (`_previews/.completed.json`, via `read_completed()`/`add_completed()`):
+  no previews = "not started"; previews not yet written and not all in the
+  CSV = "extracted"; all pending previews in the CSV = "needs review";
+  nothing pending = "written". Every RAW extension in the folder is
+  handled at once (`metadata.raw_files_by_stem()` maps name stem -> RAW
+  file), never a single hardcoded/"most common" one, and a RAW is always
+  resolved from the folder by stem, not from a path in a form. Folders
+  finished before the ledger existed only have a `.written` marker; for
+  those, `read_completed()` falls back to "everything in the last CSV",
+  and `migrate_legacy_ledger()` materializes the ledger before the CSV is
+  replaced (it must run first, or the new CSV would be read as "done").
+  `/extract` and
   `/triage` / `/write` kick off a background thread (`threading.Thread`, requires
   `app.run(..., threaded=True)`) and return immediately rather than
   blocking the request for the full operation; progress is tracked in
@@ -183,6 +193,20 @@ field it's still being asked to fill in.
   `exists()`, since a stale SMB lookup cache could lie twice). Don't
   restart the service while a write is in progress - the thread dies
   mid-folder (harmless to redo, but wasteful).
+- Folders can mix camera bodies (the Italy trip had 144 `.CR3` + 46 `.CR2`
+  in one directory). The app used to pick the single most common RAW
+  extension per folder and silently skip the rest - no previews, no
+  triage, no sidecars, yet the folder showed "written" while Lightroom
+  counted 192 files. Now every RAW type is handled, and re-running a
+  finished folder is incremental on purpose: extract only does files
+  missing a preview, triage/dedupe/review/write only touch photos not in
+  `.completed.json`. That ledger is what stops a re-run from re-writing
+  sidecars with stale values - including anything changed in Lightroom
+  since. Two RAWs in one folder sharing a name stem across extensions
+  would collide on `<stem>.jpg` and `<stem>.xmp` (Lightroom can't tell them
+  apart either); the more common extension wins and the other is skipped
+  with a warning in the journal. AppleDouble `._*` stubs from the SMB
+  share are ignored.
 - `dedupe.sharpness_score()`'s representative pick is a best-effort proxy,
   not a reliable judgment — verified during testing that it correctly
   ranks sharp > blurry within a same-exposure burst, but a synthetic

@@ -98,8 +98,9 @@ app on your network. Set it as an environment variable only (see
 [Running it permanently](#running-it-permanently-optional) below for the
 systemd version).
 
-The RAW extension for a given folder doesn't need to be set anywhere —
-it's auto-detected from whatever's actually in the folder.
+RAW file types are never set per folder — every file in a folder whose
+extension is in the RAW extensions list is picked up, so a folder shot
+with two camera bodies (say `.CR3` and `.CR2`) is handled in one pass.
 
 ## Using it
 
@@ -107,7 +108,11 @@ it's auto-detected from whatever's actually in the folder.
    card with a status and an action button.
 2. **Extract previews** — pulls the embedded JPEG preview out of each RAW
    file via `exiftool`. Runs in the background with a live progress bar;
-   no need to watch logs or refresh.
+   no need to watch logs or refresh. It only extracts files that don't
+   have a preview yet: if more RAW files appear in a folder you've
+   already processed, the folder card offers **Extract the rest**, and
+   triage, review, and write then cover only those new photos — photos
+   already written are never re-triaged or re-written.
 3. **Run triage** — choose which of Flag rejects / Rate / Keyword / Detect
    duplicates you want for this folder, then sends batches of preview
    JPEGs to the Claude API. Also runs in the background with a progress
@@ -251,10 +256,12 @@ sudo journalctl -u photo-triage -n 30 --no-pager
   pricing at anthropic.com and consider testing on one small batch before
   running the full backlog.
 - Generated files (`_previews/`, `triage_results.csv`, `.progress.json`,
-  `.written`) live inside each shoot folder under `_previews/` — safe to
-  delete a shoot's `_previews/` folder to reset its status back to "not
-  started" (the original RAW files and any already-written XMP sidecars
-  are untouched).
+  `.completed.json`) live inside each shoot folder under `_previews/` —
+  safe to delete a shoot's `_previews/` folder to reset its status back to
+  "not started" (the original RAW files and any already-written XMP
+  sidecars are untouched). `.completed.json` is the list of photos whose
+  sidecar has been written; deleting it makes the folder treat every
+  photo as unwritten again.
 
 ## License
 
