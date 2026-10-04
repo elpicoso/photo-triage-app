@@ -7,6 +7,7 @@ import anthropic
 from PIL import Image
 
 from config import load_settings
+from metadata import apply_orientation, read_orientations
 
 client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from environment
 
@@ -28,8 +29,16 @@ def build_prompt(
     the per-field criteria are all user-editable (Settings page) - only
     the field name prefixes and the JSON format below are fixed, so the
     response shape can't be broken by an edit."""
-    instructions = []
-    fields = []
+    instructions = [
+        "- subject: first identify what this photo is - its subject and technique, "
+        "in a few words (e.g. landscape, astrophotography, long exposure, "
+        "architecture interior, street, portrait, wildlife, macro, low-light). "
+        "Judge everything below against what that kind of photo calls for, not "
+        "one universal standard: darkness is expected in astro and night shots, "
+        "motion blur can be intentional in a long exposure, deep shadows can be "
+        "deliberate in an interior."
+    ]
+    fields = ['"subject": "..."']
 
     if do_reject:
         instructions.append(f"- reject: {reject_criteria}")
@@ -59,13 +68,13 @@ Filenames in order shown:
 """
 
 
-def encode_image(path, max_dimension):
+def encode_image(path, max_dimension, orientation=1):
     """Downscale to max_dimension before sending to the API. Claude
     downsizes large images internally anyway, and some cameras embed
     full-resolution previews (5-10MB+ each) that otherwise blow past the
     API's request size limit once a batch is assembled."""
     with Image.open(path) as img:
-        img = img.convert("RGB")
+        img = apply_orientation(img.convert("RGB"), orientation)
         img.thumbnail((max_dimension, max_dimension), Image.LANCZOS)
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=85)
@@ -75,6 +84,7 @@ def encode_image(path, max_dimension):
 def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True):
     settings = load_settings()
     content = []
+    orientations = read_orientations(os.path.dirname(image_paths[0]))
     for path in image_paths:
         content.append(
             {
@@ -82,7 +92,11 @@ def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True):
                 "source": {
                     "type": "base64",
                     "media_type": "image/jpeg",
-                    "data": encode_image(path, settings["max_preview_dimension"]),
+                    "data": encode_image(
+                        path,
+                        settings["max_preview_dimension"],
+                        orientations.get(os.path.splitext(os.path.basename(path))[0], 1),
+                    ),
                 },
             }
         )
@@ -116,6 +130,7 @@ def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True):
     # Normalize so the CSV always has all three columns, even if a
     # given operation was skipped for this run.
     for row in parsed:
+        row.setdefault("subject", "")
         row.setdefault("reject", "")
         row.setdefault("reject_reason", "")
         row.setdefault("rating", "")
@@ -164,6 +179,7 @@ def triage_folder(
         return [
             {
                 "filename": os.path.basename(p),
+                "subject": "",
                 "reject": "",
                 "reject_reason": "",
                 "rating": "",
@@ -191,6 +207,7 @@ def triage_folder(
                 results.append(
                     {
                         "filename": os.path.basename(path),
+                        "subject": "",
                         "reject": "",
                         "reject_reason": "",
                         "rating": "",
@@ -213,6 +230,7 @@ def triage_folder(
             results.append(
                 {
                     "filename": fname,
+                    "subject": "",
                     "reject": "yes",
                     "reject_reason": f"Duplicate of {duplicate_of[fname]}",
                     "rating": "",

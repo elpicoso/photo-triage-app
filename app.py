@@ -1,18 +1,23 @@
 import csv
+import io
 import json
 import os
 import threading
 from collections import Counter
 
+from PIL import Image
 from flask import Flask, render_template, request, redirect, url_for, abort, send_file
 
 from config import load_settings, save_settings
 from dedupe import group_duplicates
 from metadata import (
+    apply_orientation,
+    ensure_orientations,
     extract_previews,
     list_raw_files,
     missing_previews,
     raw_files_by_stem,
+    read_orientations,
     write_sidecar,
 )
 from triage import triage_folder
@@ -220,9 +225,19 @@ def browse(subpath=""):
         and not f.startswith(".")
         and not f.startswith("_")
     )
-    subdir_entries = [
-        {"name": f, "path": f"{subpath}/{f}" if subpath else f} for f in subdirs
-    ]
+    subdir_entries = []
+    for f in subdirs:
+        entry_path = f"{subpath}/{f}" if subpath else f
+        # Only folders that already have a _previews dir have been touched -
+        # skip the status lookup (a few more SMB reads) for everything else.
+        started = os.path.isdir(os.path.join(current_dir, f, "_previews"))
+        subdir_entries.append(
+            {
+                "name": f,
+                "path": entry_path,
+                "status": get_status(entry_path) if started else None,
+            }
+        )
 
     breadcrumbs = []
     if subpath:
@@ -437,6 +452,7 @@ def triage(folder):
     def run():
         try:
             migrate_legacy_ledger(folder)
+            ensure_orientations(safe_path(folder), preview_dir(folder), raw_extensions())
             duplicate_groups = None
             if do_duplicates:
                 threshold = load_settings()["duplicate_threshold"]
@@ -470,6 +486,7 @@ def triage(folder):
                 f,
                 fieldnames=[
                     "filename",
+                    "subject",
                     "reject",
                     "reject_reason",
                     "rating",
@@ -495,6 +512,30 @@ def triage(folder):
         clear_progress(folder)
 
     threading.Thread(target=run, daemon=True).start()
+    return redirect(url_for("browse", subpath=folder))
+
+
+@app.route("/reset/<path:folder>", methods=["POST"])
+def reset(folder):
+    """Reprocess a folder: forget its triage results and which photos were
+    written, so it goes back to "extracted" and triage/review/write run over
+    every photo again. Extracted previews are kept (re-extracting is slow and
+    nothing about them changes), and so are the sidecars already on disk -
+    they're only replaced if you write again. Refused while a job is running."""
+    if is_active(folder):
+        return redirect(url_for("browse", subpath=folder))
+    clear_progress(folder)  # drop a leftover error state too
+    for path in (
+        csv_path(folder),
+        ops_path(folder),
+        duplicates_path(folder),
+        completed_path(folder),
+        written_marker(folder),
+    ):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
     return redirect(url_for("browse", subpath=folder))
 
 
@@ -539,6 +580,19 @@ def preview_image(folder, filename):
     target = os.path.normpath(os.path.join(pdir, filename))
     if not (target == pdir or target.startswith(pdir + os.sep)) or not os.path.isfile(target):
         abort(404)
+    stem = os.path.splitext(os.path.basename(filename))[0]
+    orientation = read_orientations(pdir).get(stem, 1)
+    if orientation != 1:
+        # Previews carry no rotation themselves (it lives in the RAW), so
+        # portrait shots would show sideways - turn them upright, thumbnail
+        # sized since this only feeds the review page.
+        with Image.open(target) as img:
+            img = apply_orientation(img.convert("RGB"), orientation)
+            img.thumbnail((900, 900))
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=85)
+        buf.seek(0)
+        return send_file(buf, mimetype="image/jpeg")
     return send_file(target, mimetype="image/jpeg")
 
 

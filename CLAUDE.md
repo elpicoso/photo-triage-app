@@ -84,6 +84,17 @@ or got removed) — do the manual steps above until/unless it's recreated.
   "Try again" button - `is_active()` treats that as "not running" so
   retrying is always possible. `/preview/<folder>/<filename>` serves a
   single extracted preview JPEG for the review page's thumbnails.
+- Embedded previews carry no rotation - it's only in the RAW's EXIF - so
+  portrait shots come out sideways. `metadata.ensure_orientations()` reads
+  each RAW's Orientation (one exiftool call, headers only) into
+  `_previews/.orientation.json`; `apply_orientation()` is applied in
+  `triage.encode_image()` (what Claude sees) and `/preview` (review
+  thumbnails). Without it, Claude rejected sideways portrait shots as
+  "rotated 90 degrees". Run at extract and again at the start of triage.
+- `/reset/<folder>` ("Reprocess folder" on the card) deletes the CSV, ops,
+  duplicates, `.completed.json` and `.written` so a folder returns to
+  "extracted" and runs triage/review/write over every photo again. Previews
+  and sidecars stay. `browse` shows each started subfolder's status tag.
 - `metadata.py` — `extract_previews()` (calls exiftool to pull embedded
   JPEG previews from RAW files) and `write_sidecar()` (writes rating/
   keywords into XMP sidecars via exiftool, using fully-qualified tag names:
@@ -132,8 +143,11 @@ to `settings.json`, takes effect on the next request, no restart needed.
 `ANTHROPIC_API_KEY` is deliberately NOT here (see Infrastructure above) —
 it stays secret-only, in the systemd unit file.
 
-`shoot_context` is the one-line genre framing ("a landscape/astrophotography
-shoot" by default) in the triage prompt — this repo started as
+`shoot_context` is the one-line framing ("a shoot with a variety of subjects
+and techniques" by default - Wade shoots everything; the prompt makes
+Claude identify each photo's `subject` first and judge it against that
+kind of photo. The old landscape/astro default made it reject dark
+interiors and refuse non-landscape batches) in the triage prompt — this repo started as
 Wade-specific but is meant to be installable by others for any genre; see
 `README.md` (general install docs, not Wade's Pi-specific setup — that
 stays here) and `deploy/photo-triage.service` / `Dockerfile` /

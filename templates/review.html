@@ -70,6 +70,7 @@
     vertical-align: middle;
   }
   tr.rejected { opacity: 0.55; }
+  .subject { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 0.72rem; color: var(--amber); margin-top: 0.15rem; }
   .filename { font-family: "SF Mono", Consolas, monospace; font-size: 0.78rem; color: var(--muted); }
   input[type=text], select {
     background: var(--bg);
@@ -180,6 +181,7 @@
             <td class="filename">
               {{ row.filename }}
               <input type="hidden" name="filename" value="{{ row.filename }}">
+              {% if row.subject %}<div class="subject">{{ row.subject }}</div>{% endif %}
               {% if row.group %}
                 <span class="group-badge">
                   {% if row.filename == row.group.representative %}

@@ -17,18 +17,21 @@ DEFAULT_RAW_EXTENSIONS = ["cr2", "cr3", "nef", "arw", "raf", "dng", "orf", "rw2"
 DEFAULT_DUPLICATE_THRESHOLD = int(os.environ.get("DUPLICATE_THRESHOLD", "5"))
 
 # The framing/genre sentence in the triage prompt (see triage.build_prompt())
-# - e.g. swap to "a wedding" or "a corporate headshot session" for shoots
-# that aren't landscape/astro.
-DEFAULT_SHOOT_CONTEXT = "a landscape/astrophotography shoot"
+# - e.g. swap to "a wedding" or "a corporate headshot session" for a
+# single-genre shoot. The default is deliberately genre-neutral: the prompt
+# has Claude identify each photo's subject/technique first.
+DEFAULT_SHOOT_CONTEXT = "a shoot with a variety of subjects and techniques"
 
 # Evaluation criteria sent to Claude as part of the triage prompt (see
 # triage.build_prompt()). These are the exact instructions the model
 # follows for each field - editable via the Settings page so they can be
 # tuned (e.g. reject tolerance, keyword style) without a code change.
 DEFAULT_REJECT_CRITERIA = (
-    '"yes" if technically bad (blurry, out of focus, blown highlights, '
-    "poorly composed). Note: intentional long exposures, star trails, and "
-    "motion blur in moving elements (water, clouds) are NOT rejects."
+    '"yes" if technically bad for its type of shot (blurry or out of focus '
+    "where sharpness matters, accidental blown highlights or crushed shadows, "
+    "poorly composed). Deliberate technique is NOT a reject: long exposures, "
+    "star trails, intentional motion blur, low-key or silhouette exposures, "
+    "shallow depth of field."
 )
 DEFAULT_RATING_CRITERIA = "1-5 stars if kept (use 0 if rejected)"
 DEFAULT_KEYWORD_CRITERIA = (

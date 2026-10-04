@@ -7,8 +7,9 @@ edit the results in a browser, then writes your (possibly edited) choices
 into XMP sidecar files that Lightroom Classic (or any XMP-aware catalog
 tool) can pick up.
 
-Originally built for landscape/astrophotography, but the evaluation
-criteria are fully editable from the Settings page — see
+Claude first identifies each photo's subject and technique (landscape,
+astro, interior, street, ...) and judges it against what that kind of
+photo calls for, and the evaluation criteria are fully editable from the Settings page — see
 [Customizing the evaluation criteria](#customizing-the-evaluation-criteria)
 below if you shoot something else.
 
@@ -89,7 +90,7 @@ each install/machine keeps its own):
 | Triage model (Anthropic model ID) | `TRIAGE_MODEL` | `claude-haiku-4-5-20251001` |
 | Batch size (images per API call) | `BATCH_SIZE` | `8` |
 | Max preview dimension (px, before sending to the API) | `MAX_PREVIEW_DIMENSION` | `1568` |
-| Shoot context, reject/rating/keyword criteria | — | landscape/astro-tuned defaults |
+| Shoot context, reject/rating/keyword criteria | — | genre-neutral defaults (Claude identifies each photo's subject/technique first) |
 | Duplicate threshold (Hamming distance, 0-64) | `DUPLICATE_THRESHOLD` | `5` |
 
 `ANTHROPIC_API_KEY` is deliberately **not** on the Settings page — it's a
@@ -142,6 +143,12 @@ with two camera bodies (say `.CR3` and `.CR2`) is handled in one pass.
    `Rating=-1` into its Reject flag (flags live only in its catalog), so
    the red label is what marks rejects there: filter by Color Label → Red,
    check them, select all, and press `X` to flag them as Rejected.
+   To run a folder through again from scratch (new criteria, a fixed
+   bug), use **Reprocess folder** on its card: it forgets the triage results
+   and which photos were written, so everything goes through triage, review
+   and write again. Previews and existing sidecars are kept until you write.
+   The folder list also shows a status tag on every folder that has been
+   started (written, needs review, ...).
 6. In Lightroom: select the folder, then **Metadata → Read Metadata from
    File**. This step is manual — "Synchronize Folder" alone won't pick up
    changed sidecars on photos already in the catalog, only added/removed

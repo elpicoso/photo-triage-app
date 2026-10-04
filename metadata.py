@@ -1,8 +1,11 @@
+import json
 import os
 import subprocess
 import tempfile
 import time
 from collections import Counter
+
+from PIL import Image
 
 
 def _ext(filename):
@@ -44,6 +47,72 @@ def raw_files_by_stem(dir_path, raw_extensions):
         else:
             by_stem[stem] = f
     return by_stem, skipped
+
+
+ORIENTATION_FILE = ".orientation.json"
+
+# EXIF Orientation value -> the PIL transpose that makes the image upright.
+_TRANSPOSE = {
+    2: Image.Transpose.FLIP_LEFT_RIGHT,
+    3: Image.Transpose.ROTATE_180,
+    4: Image.Transpose.FLIP_TOP_BOTTOM,
+    5: Image.Transpose.TRANSPOSE,
+    6: Image.Transpose.ROTATE_270,
+    7: Image.Transpose.TRANSVERSE,
+    8: Image.Transpose.ROTATE_90,
+}
+
+
+def apply_orientation(img, orientation):
+    """Rotate/flip img upright for an EXIF Orientation value (1 = already
+    upright). The embedded previews carry no rotation of their own - the
+    camera records it only in the RAW file - so a portrait shot's preview
+    is a sideways landscape image until this is applied."""
+    op = _TRANSPOSE.get(orientation)
+    return img.transpose(op) if op is not None else img
+
+
+def read_orientations(preview_dir):
+    """{stem: EXIF orientation} saved for this folder (empty if unknown)."""
+    try:
+        with open(os.path.join(preview_dir, ORIENTATION_FILE)) as f:
+            return json.load(f)
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+def ensure_orientations(raw_dir, preview_dir, raw_extensions):
+    """Reads Orientation from each RAW (headers only, one exiftool call) for
+    any previewed photo not yet recorded, and saves it to
+    _previews/.orientation.json so triage and the review thumbnails can show
+    each preview the right way up."""
+    by_stem, _ = raw_files_by_stem(raw_dir, raw_extensions)
+    known = read_orientations(preview_dir)
+    todo = [
+        os.path.join(raw_dir, f)
+        for stem, f in sorted(by_stem.items())
+        if stem not in known and _preview_ok(preview_dir, stem)
+    ]
+    if not todo:
+        return known
+    with tempfile.NamedTemporaryFile("w", suffix=".args", delete=False) as argfile:
+        argfile.write("\n".join(todo) + "\n")
+    try:
+        out = subprocess.run(
+            ["exiftool", "-j", "-n", "-Orientation", "-@", argfile.name],
+            capture_output=True, text=True,
+        ).stdout
+    finally:
+        os.unlink(argfile.name)
+    for row in json.loads(out) if out.strip() else []:
+        stem = os.path.splitext(os.path.basename(row["SourceFile"]))[0]
+        known[stem] = int(row.get("Orientation") or 1)
+    path = os.path.join(preview_dir, ORIENTATION_FILE)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(known, f)
+    os.replace(tmp, path)
+    return known
 
 
 def _preview_ok(preview_dir, stem):
@@ -129,6 +198,8 @@ def extract_previews(raw_dir, preview_dir, raw_extensions, progress_callback=Non
 
     if progress_callback:
         progress_callback(total, total)
+
+    ensure_orientations(raw_dir, preview_dir, raw_extensions)
 
     missing = [f for stem, f in todo if not _preview_ok(preview_dir, stem)]
     for f in missing:

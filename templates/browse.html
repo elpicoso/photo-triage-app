@@ -160,6 +160,23 @@
   }
   .folder-row:hover { border-color: var(--amber-dim); }
   .folder-icon { color: var(--muted); font-size: 0.9rem; }
+  .folder-status {
+    margin-left: auto;
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 0.1rem 0.45rem;
+  }
+  .folder-row.is-written { border-left: 3px solid #5a9a5a; }
+  .folder-row.is-written .folder-status { color: #7fc27f; border-color: #3d6b3d; }
+  .folder-row.is-review .folder-status { color: var(--amber); border-color: var(--amber-dim); }
+  .reprocess { margin-left: auto; }
+  .reprocess button { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 500; }
+  .reprocess button:hover { color: var(--text); border-color: var(--amber-dim); background: transparent; }
   .folder-name { font-family: "SF Mono", Consolas, monospace; font-size: 0.9rem; }
   .empty { color: var(--muted); text-align: center; padding: 2rem 0; font-size: 0.9rem; }
 </style>
@@ -253,6 +270,12 @@
             <span class="ready-note">Ready for Lightroom import</span>
           {% endif %}
         </div>
+        {% if status != 'not started' and not (progress and not progress.error) %}
+          <form class="reprocess" action="{{ url_for('reset', folder=subpath) }}" method="post"
+                onsubmit="return confirm('Reprocess this folder?\n\nThis clears its triage results and the record of which photos were written, so every photo goes through triage, review and write again. Writing again replaces the XMP sidecars - including any change made to those photos in Lightroom since. Extracted previews and existing sidecars are kept until you write.');">
+            <button type="submit">Reprocess folder</button>
+          </form>
+        {% endif %}
         {% if unextracted_count and not progress %}
           <div class="more-raws">
             <span><strong>{{ unextracted_count }} more RAW file{{ '' if unextracted_count == 1 else 's' }}</strong>
@@ -267,9 +290,11 @@
 
     <div class="folder-list">
       {% for entry in subdirs %}
-        <a class="folder-row" href="{{ url_for('browse', subpath=entry.path) }}">
-          <span class="folder-icon">&#128193;</span>
+        <a class="folder-row {{ 'is-written' if entry.status == 'written' else ('is-review' if entry.status and 'review' in entry.status else '') }}"
+           href="{{ url_for('browse', subpath=entry.path) }}">
+          <span class="folder-icon">{{ '&#9989;'|safe if entry.status == 'written' else '&#128193;'|safe }}</span>
           <span class="folder-name">{{ entry.name }}</span>
+          {% if entry.status %}<span class="folder-status">{{ entry.status }}</span>{% endif %}
         </a>
       {% endfor %}
     </div>
