@@ -135,9 +135,13 @@ with two camera bodies (say `.CR3` and `.CR2`) is handled in one pass.
    sidecar files next to each RAW, using fully-qualified tag names
    (`XMP-xmp:Rating`, `XMP-dc:Subject`) so they land where Lightroom
    actually looks for them. You can uncheck Rating or Keywords here to
-   skip writing that field for this batch — a rejected row's `Rating=-1`
-   is always written regardless, since reject is meant to be a permanent
-   judgment, not something to selectively skip.
+   skip writing that field for this batch. A rejected row always gets
+   `Rating=-1`, a **red color label**, and a Caption (`XMP-dc:Description`)
+   of "Rejected: <reason>" - the reason Claude gave, editable in the
+   review table's "Why rejected" column. Lightroom Classic does not turn
+   `Rating=-1` into its Reject flag (flags live only in its catalog), so
+   the red label is what marks rejects there: filter by Color Label → Red,
+   check them, select all, and press `X` to flag them as Rejected.
 6. In Lightroom: select the folder, then **Metadata → Read Metadata from
    File**. This step is manual — "Synchronize Folder" alone won't pick up
    changed sidecars on photos already in the catalog, only added/removed

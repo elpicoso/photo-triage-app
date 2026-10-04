@@ -33,7 +33,12 @@ def build_prompt(
 
     if do_reject:
         instructions.append(f"- reject: {reject_criteria}")
+        instructions.append(
+            "- reject_reason: if reject is yes, a short phrase (under 10 words) "
+            "saying specifically why; otherwise an empty string"
+        )
         fields.append('"reject": "yes/no"')
+        fields.append('"reject_reason": "..."')
     if do_rating:
         instructions.append(f"- rating: {rating_criteria}")
         fields.append('"rating": 0-5')
@@ -112,6 +117,7 @@ def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True):
     # given operation was skipped for this run.
     for row in parsed:
         row.setdefault("reject", "")
+        row.setdefault("reject_reason", "")
         row.setdefault("rating", "")
         row.setdefault("keywords", "")
     return parsed
@@ -159,6 +165,7 @@ def triage_folder(
             {
                 "filename": os.path.basename(p),
                 "reject": "",
+                "reject_reason": "",
                 "rating": "",
                 "keywords": "",
                 "duplicate_of": duplicate_of.get(os.path.basename(p), ""),
@@ -185,6 +192,7 @@ def triage_folder(
                     {
                         "filename": os.path.basename(path),
                         "reject": "",
+                        "reject_reason": "",
                         "rating": "",
                         "keywords": f"ERROR: {e}",
                     }
@@ -206,6 +214,7 @@ def triage_folder(
                 {
                     "filename": fname,
                     "reject": "yes",
+                    "reject_reason": f"Duplicate of {duplicate_of[fname]}",
                     "rating": "",
                     "keywords": "",
                     "duplicate_of": duplicate_of[fname],

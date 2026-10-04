@@ -136,7 +136,7 @@ def extract_previews(raw_dir, preview_dir, raw_extensions, progress_callback=Non
     return total - len(missing)
 
 
-def write_sidecar(raw_path, rating=None, reject=False, keywords=None):
+def write_sidecar(raw_path, rating=None, reject=False, keywords=None, reject_reason=""):
     """Writes rating/keywords into an XMP sidecar. Uses fully-qualified tag
     names (XMP-xmp:Rating, XMP-dc:Subject) rather than the generic
     -Rating/-Keywords shortcuts, which can land in unexpected namespaces
@@ -170,6 +170,10 @@ def write_sidecar(raw_path, rating=None, reject=False, keywords=None):
     tags = []
     if reject:
         tags = ["-XMP-xmp:Rating=-1", "-XMP-xmp:Label=Red"]
+        if reject_reason:
+            # Lightroom shows dc:Description as the Caption, so the reason
+            # is visible (and searchable) next to the red label.
+            tags.append(f"-XMP-dc:Description=Rejected: {reject_reason}")
     else:
         if rating is not None and rating != "":
             tags.append(f"-XMP-xmp:Rating={rating}")

@@ -82,6 +82,7 @@
   }
   input[name="rating"] { width: 3rem; }
   input[name="keywords"] { width: 100%; }
+  input[name="reject_reason"] { width: 14rem; }
   .submit-row { margin-top: 1.5rem; display: flex; justify-content: space-between; align-items: center; }
   button {
     background: var(--amber);
@@ -164,6 +165,7 @@
             <th></th>
             <th>File</th>
             <th>Reject</th>
+            <th>Why rejected</th>
             <th>Rating</th>
             <th>Keywords</th>
           </tr>
@@ -196,6 +198,9 @@
               </select>
             </td>
             <td>
+              <input type="text" name="reject_reason" value="{{ row.reject_reason }}">
+            </td>
+            <td>
               <input type="text" name="rating" value="{{ row.rating }}">
             </td>
             <td>
@@ -225,7 +230,9 @@
     function makeKeeper(groupId, filename) {
       document.querySelectorAll('tr[data-group="' + CSS.escape(groupId) + '"]').forEach(function (tr) {
         const select = tr.querySelector('select[name="reject"]');
-        select.value = (tr.dataset.filename === filename) ? 'no' : 'yes';
+        const keep = tr.dataset.filename === filename;
+        select.value = keep ? 'no' : 'yes';
+        tr.querySelector('input[name="reject_reason"]').value = keep ? '' : 'Duplicate of ' + filename;
       });
     }
   </script>

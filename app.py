@@ -468,7 +468,14 @@ def triage(folder):
         with open(csv_path(folder), "w", newline="") as f:
             writer = csv.DictWriter(
                 f,
-                fieldnames=["filename", "reject", "rating", "keywords", "duplicate_of"],
+                fieldnames=[
+                    "filename",
+                    "reject",
+                    "reject_reason",
+                    "rating",
+                    "keywords",
+                    "duplicate_of",
+                ],
             )
             writer.writeheader()
             writer.writerows(results)
@@ -555,9 +562,10 @@ def write(folder):
 
     # Copy everything out of the request now - the thread outlives it.
     jobs = []
-    for filename, reject, rating, keywords in zip(
+    for filename, reject, reason, rating, keywords in zip(
         request.form.getlist("filename"),
         request.form.getlist("reject"),
+        request.form.getlist("reject_reason"),
         request.form.getlist("rating"),
         request.form.getlist("keywords"),
     ):
@@ -574,6 +582,7 @@ def write(folder):
                 rating if do_rating else None,
                 reject.strip().lower() == "yes",
                 keywords if do_keywords else None,
+                reason.strip(),
             )
         )
 
@@ -585,8 +594,14 @@ def write(folder):
         filename = "(setup)"
         try:
             migrate_legacy_ledger(folder)
-            for done, (filename, raw_path, rating, reject, keywords) in enumerate(jobs):
-                write_sidecar(raw_path, rating=rating, reject=reject, keywords=keywords)
+            for done, (filename, raw_path, rating, reject, keywords, reason) in enumerate(jobs):
+                write_sidecar(
+                    raw_path,
+                    rating=rating,
+                    reject=reject,
+                    keywords=keywords,
+                    reject_reason=reason,
+                )
                 written.append(filename)
                 write_progress(folder, "writing", done + 1, total)
                 if len(written) % 25 == 0:

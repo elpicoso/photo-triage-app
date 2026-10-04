@@ -177,10 +177,18 @@ field it's still being asked to fill in.
   the Anthropic Console (API Keys → disable old key → Create Key).
 - `/write`'s reject flag has no write-time override (unlike rating and
   keywords, which have checkboxes in `review.html`) — any row with
-  `reject=yes` always gets `XMP-xmp:Rating=-1` + `Label=Red` written.
-  This is intentional (confirmed with Wade): reject is a binary, permanent
-  judgment, not something worth selectively skipping at write time the
-  way you might skip keywords for speed.
+  `reject=yes` always gets `XMP-xmp:Rating=-1` + `Label=Red` written,
+  plus `XMP-dc:Description=Rejected: <reason>` (Lightroom's Caption) when
+  there's a reason (`reject_reason` CSV column / "Why rejected" input;
+  duplicates get "Duplicate of <rep>"). This is intentional (confirmed with
+  Wade): reject is a binary, permanent judgment, not something worth
+  selectively skipping at write time the way you might skip keywords for
+  speed. **Lightroom Classic does NOT turn `Rating=-1` into its Reject
+  flag** (flags are catalog-only, not read from XMP - verified: 58 sidecars
+  had -1 + Red and none showed flagged). The red label is the only reject
+  marker that reaches Lightroom; Wade selects Color Label = Red and presses
+  `X` there. Writing the caption overwrites any existing Caption on Read
+  Metadata from File.
 - `/write` used to run inside the HTTP request and hit a 500 whenever a
   folder took long enough that the page looked hung and got re-submitted:
   writing is ~5s/photo over SMB (a 144-RAW folder is ~12 min), and the
