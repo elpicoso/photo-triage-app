@@ -434,6 +434,13 @@ def preview_image(folder, filename):
 
 @app.route("/write/<path:folder>", methods=["POST"])
 def write(folder):
+    # Writing a whole folder is slow over SMB (a couple of exiftool calls
+    # per photo - minutes for a big shoot), so it runs in the background
+    # like extract/triage. A second submit while one is running is ignored
+    # rather than racing the first over the same sidecars.
+    if is_active(folder):
+        return redirect(url_for("browse", subpath=folder))
+
     raw_dir = safe_path(folder)
     raw_ext = detect_raw_ext(raw_dir)
     if raw_ext is None:
@@ -443,25 +450,43 @@ def write(folder):
     do_rating = "rating" in write_ops
     do_keywords = "keywords" in write_ops
 
-    filenames = request.form.getlist("filename")
-    rejects = request.form.getlist("reject")
-    ratings = request.form.getlist("rating")
-    keywords_list = request.form.getlist("keywords")
-
+    # Copy everything out of the request now - the thread outlives it.
+    jobs = []
     for filename, reject, rating, keywords in zip(
-        filenames, rejects, ratings, keywords_list
+        request.form.getlist("filename"),
+        request.form.getlist("reject"),
+        request.form.getlist("rating"),
+        request.form.getlist("keywords"),
     ):
         raw_path = os.path.join(raw_dir, filename.replace(".jpg", f".{raw_ext}"))
         if not os.path.exists(raw_path):
             continue
-        write_sidecar(
-            raw_path,
-            rating=rating if do_rating else None,
-            reject=reject.strip().lower() == "yes",
-            keywords=keywords if do_keywords else None,
+        jobs.append(
+            (
+                filename,
+                raw_path,
+                rating if do_rating else None,
+                reject.strip().lower() == "yes",
+                keywords if do_keywords else None,
+            )
         )
 
-    open(written_marker(folder), "w").close()
+    total = len(jobs)
+    write_progress(folder, "writing", 0, total)
+
+    def run():
+        try:
+            for done, (filename, raw_path, rating, reject, keywords) in enumerate(jobs):
+                write_sidecar(raw_path, rating=rating, reject=reject, keywords=keywords)
+                write_progress(folder, "writing", done + 1, total)
+        except Exception as e:
+            write_progress(folder, "writing", done, total, error=f"{filename}: {e}")
+            return
+
+        open(written_marker(folder), "w").close()
+        clear_progress(folder)
+
+    threading.Thread(target=run, daemon=True).start()
     return redirect(url_for("browse", subpath=folder))
 
 

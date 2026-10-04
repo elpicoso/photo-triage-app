@@ -198,6 +198,9 @@
                   <form action="{{ url_for('extract', folder=subpath) }}" method="post">
                     <button type="submit">Try again</button>
                   </form>
+                {% elif progress.stage == 'writing' %}
+                  {# the edits being written live on the review form, so a retry has to resubmit from there #}
+                  <a class="btn" href="{{ url_for('review', folder=subpath) }}">Back to review</a>
                 {% else %}
                   <form action="{{ url_for('triage', folder=subpath) }}" method="post">
                     <input type="hidden" name="ops" value="reject">
@@ -209,7 +212,7 @@
                 {% endif %}
               {% else %}
                 <div class="progress-label">
-                  <span>{{ 'Extracting previews' if progress.stage == 'extracting' else 'Running triage' }}</span>
+                  <span>{{ {'extracting': 'Extracting previews', 'writing': 'Writing XMP sidecars'}.get(progress.stage, 'Running triage') }}</span>
                   <span>{{ progress.done }}/{{ progress.total }}</span>
                 </div>
                 <div class="progress-bar">

@@ -65,7 +65,7 @@ or got removed) — do the manual steps above until/unless it's recreated.
   `_previews/triage_results.csv`, and `_previews/.written`. RAW extension
   per folder is auto-detected from what's actually on disk
   (`detect_raw_ext()`), not hardcoded or form-supplied. `/extract` and
-  `/triage` kick off a background thread (`threading.Thread`, requires
+  `/triage` / `/write` kick off a background thread (`threading.Thread`, requires
   `app.run(..., threaded=True)`) and return immediately rather than
   blocking the request for the full operation; progress is tracked in
   `_previews/.progress.json` (done/total/error), polled by `browse.html`
@@ -171,6 +171,18 @@ field it's still being asked to fill in.
   This is intentional (confirmed with Wade): reject is a binary, permanent
   judgment, not something worth selectively skipping at write time the
   way you might skip keywords for speed.
+- `/write` used to run inside the HTTP request and hit a 500 whenever a
+  folder took long enough that the page looked hung and got re-submitted:
+  writing is ~5s/photo over SMB (a 144-RAW folder is ~12 min), and the
+  overlapping requests raced `write_sidecar`'s `exists()` check against
+  `exiftool -o`, which refuses to overwrite ("already exists") - an
+  uncaught `CalledProcessError`. Fixed two ways: `/write` now runs in the
+  background with a progress bar and ignores a second submit while one is
+  active (`is_active()`), and `write_sidecar` treats exiftool's own
+  "already exists" message as success (deliberately not re-checking
+  `exists()`, since a stale SMB lookup cache could lie twice). Don't
+  restart the service while a write is in progress - the thread dies
+  mid-folder (harmless to redo, but wasteful).
 - `dedupe.sharpness_score()`'s representative pick is a best-effort proxy,
   not a reliable judgment — verified during testing that it correctly
   ranks sharp > blurry within a same-exposure burst, but a synthetic

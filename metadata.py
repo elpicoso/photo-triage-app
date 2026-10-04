@@ -68,7 +68,19 @@ def write_sidecar(raw_path, rating=None, reject=False, keywords=None):
     xmp_path = os.path.splitext(raw_path)[0] + ".xmp"
 
     if not os.path.exists(xmp_path):
-        subprocess.run(["exiftool", "-o", xmp_path, raw_path], check=True)
+        result = subprocess.run(
+            ["exiftool", "-o", xmp_path, raw_path], capture_output=True, text=True
+        )
+        output = (result.stderr + result.stdout).strip()
+        # exiftool refuses to -o over an existing file. "Already exists"
+        # here means the sidecar was created between our exists() check and
+        # exiftool running (an overlapping /write for the same folder, or a
+        # stale SMB lookup cache) - the outcome we wanted, so carry on and
+        # write the tags into it. We trust exiftool's own message rather
+        # than re-checking the filesystem, since a stale cache could lie
+        # twice. Any other failure is real.
+        if result.returncode != 0 and "already exists" not in output:
+            raise RuntimeError(f"couldn't create {os.path.basename(xmp_path)}: {output}")
 
     tags = []
     if reject:
