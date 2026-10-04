@@ -416,7 +416,12 @@ def review(folder):
     for row in rows:
         row["group"] = group_by_filename.get(row["filename"])
 
-    return render_template("review.html", folder=folder, rows=rows, ops=ops)
+    progress = read_progress(folder)
+    writing = progress if is_active(folder) and progress["stage"] == "writing" else None
+
+    return render_template(
+        "review.html", folder=folder, rows=rows, ops=ops, writing=writing
+    )
 
 
 @app.route("/preview/<path:folder>/<filename>")

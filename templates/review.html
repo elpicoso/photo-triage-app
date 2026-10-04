@@ -95,6 +95,17 @@
   }
   button:hover { background: #eba447; }
   .note { color: var(--muted); font-size: 0.78rem; }
+  .writing-banner {
+    background: rgba(217, 143, 43, 0.1);
+    border: 1px solid var(--amber-dim);
+    color: var(--amber);
+    border-radius: 6px;
+    padding: 0.7rem 1rem;
+    font-size: 0.85rem;
+    margin-bottom: 1.25rem;
+  }
+  .writing-banner a { color: var(--amber); }
+  button:disabled { opacity: 0.55; cursor: default; background: var(--amber); }
 
   .thumb {
     width: 64px;
@@ -132,7 +143,15 @@
       <a class="back" href="{{ url_for('browse', subpath=folder.rsplit('/', 1)[0] if '/' in folder else '') }}">&larr; back</a>
     </header>
 
-    <form action="{{ url_for('write', folder=folder) }}" method="post">
+    {% if writing %}
+      <div class="writing-banner">
+        A write is already running for this folder ({{ writing.done }}/{{ writing.total }} sidecars).
+        It keeps going on its own &mdash; <a href="{{ url_for('browse', subpath=folder) }}">watch its progress</a>
+        rather than submitting again.
+      </div>
+    {% endif %}
+
+    <form action="{{ url_for('write', folder=folder) }}" method="post" id="write-form">
       <div class="write-ops">
         <span>Write to XMP:</span>
         <label><input type="checkbox" name="ops" value="rating" {{ 'checked' if ops.rating }}> Rating</label>
@@ -189,12 +208,20 @@
 
       <div class="submit-row">
         <span class="note">Edit any row before committing — this writes directly to XMP sidecars. Unchecked boxes above are skipped entirely, even if a row has a value.</span>
-        <button type="submit">Write to XMP</button>
+        <button type="submit" id="write-btn"{% if writing %} disabled{% endif %}>Write to XMP</button>
       </div>
     </form>
   </div>
 
   <script>
+    // Instant feedback on click, and no double-submits: writing a big folder
+    // takes minutes, and a page that looks idle gets clicked again.
+    document.getElementById('write-form').addEventListener('submit', function () {
+      const btn = document.getElementById('write-btn');
+      btn.disabled = true;
+      btn.textContent = 'Starting\u2026';
+    });
+
     function makeKeeper(groupId, filename) {
       document.querySelectorAll('tr[data-group="' + CSS.escape(groupId) + '"]').forEach(function (tr) {
         const select = tr.querySelector('select[name="reject"]');
