@@ -54,6 +54,35 @@ def progress_path(folder):
     return os.path.join(preview_dir(folder), ".progress.json")
 
 
+def write_json_atomic(path, data):
+    """Write to a temp file then rename, so a reader (or a crash/overlapping
+    writer) never sees a truncated or zero-padded file. Over an SMB mount an
+    in-place rewrite can leave a file whose size and contents disagree - a
+    valid JSON document followed by NUL bytes - which json.load rejects."""
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.replace(tmp, path)
+
+
+def read_json_lenient(path, default):
+    """Read a JSON file used only to decorate the review page (duplicate
+    groups, remembered ops). Tolerates trailing NUL padding and, failing
+    that, falls back to `default` - a damaged helper file shouldn't turn the
+    whole review page into a 500."""
+    try:
+        with open(path) as f:
+            text = f.read()
+    except FileNotFoundError:
+        return default
+    try:
+        data, _ = json.JSONDecoder().raw_decode(text.lstrip("\x00 \n\t"))
+        return data
+    except ValueError:
+        print(f"WARNING: ignoring unreadable {path}")
+        return default
+
+
 def write_progress(folder, stage, done, total, error=None):
     """Written by the background extract/triage thread, polled by /status.
     Written to a temp file then renamed so a concurrent GET never sees a
@@ -61,11 +90,7 @@ def write_progress(folder, stage, done, total, error=None):
     data = {"stage": stage, "done": done, "total": total}
     if error:
         data["error"] = error
-    path = progress_path(folder)
-    tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(data, f)
-    os.replace(tmp, path)
+    write_json_atomic(progress_path(folder), data)
 
 
 def clear_progress(folder):
@@ -127,11 +152,7 @@ def read_completed(folder):
 
 def add_completed(folder, filenames):
     done = read_completed(folder) | set(filenames)
-    path = completed_path(folder)
-    tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(sorted(done), f)
-    os.replace(tmp, path)
+    write_json_atomic(completed_path(folder), sorted(done))
 
 
 def migrate_legacy_ledger(folder):
@@ -422,8 +443,7 @@ def triage(folder):
                 duplicate_groups = group_duplicates(
                     preview_dir(folder), threshold, only=pending
                 )
-                with open(duplicates_path(folder), "w") as f:
-                    json.dump(duplicate_groups, f)
+                write_json_atomic(duplicates_path(folder), duplicate_groups)
             elif os.path.exists(duplicates_path(folder)):
                 # A previous run found groups but this run doesn't want
                 # dedup applied - clear stale grouping data so the review
@@ -455,16 +475,15 @@ def triage(folder):
 
         # Remember what was selected so the review step can default its own
         # write-time checkboxes to match (with the option to override there).
-        with open(ops_path(folder), "w") as f:
-            json.dump(
-                {
-                    "reject": do_reject,
-                    "rating": do_rating,
-                    "keywords": do_keywords,
-                    "duplicates": do_duplicates,
-                },
-                f,
-            )
+        write_json_atomic(
+            ops_path(folder),
+            {
+                "reject": do_reject,
+                "rating": do_rating,
+                "keywords": do_keywords,
+                "duplicates": do_duplicates,
+            },
+        )
 
         clear_progress(folder)
 
@@ -479,23 +498,19 @@ def review(folder):
         rows = [r for r in csv.DictReader(f) if r["filename"] not in completed]
 
     ops = {"reject": True, "rating": True, "keywords": True}
-    if os.path.exists(ops_path(folder)):
-        with open(ops_path(folder)) as f:
-            ops.update(json.load(f))
+    ops.update(read_json_lenient(ops_path(folder), {}))
 
     # Attach group info (for the thumbnail/badge/swap UI) to each row that's
     # part of a duplicate group - None for rows that aren't.
     group_by_filename = {}
-    if os.path.exists(duplicates_path(folder)):
-        with open(duplicates_path(folder)) as f:
-            duplicate_groups = json.load(f)
-        for representative, info in duplicate_groups.items():
-            for member in info["members"]:
-                group_by_filename[member] = {
-                    "representative": representative,
-                    "members": info["members"],
-                    "sharpness": round(info["sharpness"][member], 1),
-                }
+    duplicate_groups = read_json_lenient(duplicates_path(folder), {})
+    for representative, info in duplicate_groups.items():
+        for member in info["members"]:
+            group_by_filename[member] = {
+                "representative": representative,
+                "members": info["members"],
+                "sharpness": round(info["sharpness"][member], 1),
+            }
     for row in rows:
         row["group"] = group_by_filename.get(row["filename"])
 
