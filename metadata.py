@@ -222,8 +222,9 @@ def write_sidecar(raw_path, rating=None, reject=False, keywords=None, reject_rea
     at triage time and left "keywords" unchecked.
     """
     xmp_path = os.path.splitext(raw_path)[0] + ".xmp"
+    existed = os.path.exists(xmp_path)
 
-    if not os.path.exists(xmp_path):
+    if not existed:
         result = subprocess.run(
             ["exiftool", "-o", xmp_path, raw_path], capture_output=True, text=True
         )
@@ -250,6 +251,22 @@ def write_sidecar(raw_path, rating=None, reject=False, keywords=None, reject_rea
             tags.append(f"-XMP-xmp:Rating={rating}")
         if keywords is not None and keywords != "":
             tags.append(f"-XMP-dc:Subject={keywords}")
+
+    if existed:
+        # A sidecar from an earlier run can still carry that run's reject
+        # markers (red label, "Rejected: ..." caption). A photo that's no
+        # longer a reject - or is one for a new reason - must not inherit
+        # them. Only clear what this app writes: a red label, or a caption
+        # starting "Rejected:"; anything else was set in Lightroom.
+        current = subprocess.run(
+            ["exiftool", "-j", "-XMP-xmp:Label", "-XMP-dc:Description", xmp_path],
+            capture_output=True, text=True,
+        ).stdout
+        info = (json.loads(current) or [{}])[0] if current.strip() else {}
+        if not reject and info.get("Label") == "Red":
+            tags.append("-XMP-xmp:Label=")
+        if str(info.get("Description", "")).startswith("Rejected:") and not (reject and reject_reason):
+            tags.append("-XMP-dc:Description=")
 
     if not tags:
         return
