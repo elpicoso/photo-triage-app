@@ -149,10 +149,17 @@ with two camera bodies (say `.CR3` and `.CR2`) is handled in one pass.
    and write again. Previews and existing sidecars are kept until you write.
    The folder list also shows a status tag on every folder that has been
    started (written, needs review, ...).
-6. In Lightroom: select the folder, then **Metadata → Read Metadata from
-   File**. This step is manual — "Synchronize Folder" alone won't pick up
-   changed sidecars on photos already in the catalog, only added/removed
-   files.
+6. In Lightroom Classic: **back up the catalog first** (File → Back Up
+   Catalog, or let it back up on quit), then select the photos and use
+   **Metadata → Read Metadata from File**. This step is manual -
+   "Synchronize Folder" alone won't pick up changed sidecars on photos
+   already in the catalog, only added/removed files. Lightroom keeps your
+   edits in its catalog, not in the sidecar, and this command makes the
+   sidecar the source of truth: it overwrites the catalog's metadata with
+   what's on disk. The sidecars this app creates contain only the rating,
+   reject label, caption and keywords - no develop settings - but try it on
+   **one photo you've already edited** first and confirm its edits survive
+   before running it on a whole folder.
 
 Worth spot-checking one file's actual XMP output before trusting a big
 batch: `exiftool -G1 -a -s path/to/file.xmp`.

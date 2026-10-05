@@ -225,6 +225,15 @@ def write_sidecar(raw_path, rating=None, reject=False, keywords=None, reject_rea
     existed = os.path.exists(xmp_path)
 
     if not existed:
+        # -o copies the RAW's embedded metadata into the new sidecar, which
+        # includes its Camera Raw develop settings (crs: - just the camera
+        # defaults, e.g. ColorTemperature/ToneCurve). Lightroom's "Read
+        # Metadata from File" applies whatever develop settings a sidecar
+        # holds, so those defaults reset every edit the photo has in the
+        # catalog. They're stripped in the tag-writing step below (deleting
+        # them in this same -o command doesn't take): a sidecar we create
+        # carries no develop state. Pre-existing sidecars are never touched
+        # - they may hold real edits Lightroom wrote itself.
         result = subprocess.run(
             ["exiftool", "-o", xmp_path, raw_path], capture_output=True, text=True
         )
@@ -238,6 +247,9 @@ def write_sidecar(raw_path, rating=None, reject=False, keywords=None, reject_rea
         # twice. Any other failure is real.
         if result.returncode != 0 and "already exists" not in output:
             raise RuntimeError(f"couldn't create {os.path.basename(xmp_path)}: {output}")
+        created = result.returncode == 0
+    else:
+        created = False
 
     tags = []
     if reject:
@@ -251,6 +263,9 @@ def write_sidecar(raw_path, rating=None, reject=False, keywords=None, reject_rea
             tags.append(f"-XMP-xmp:Rating={rating}")
         if keywords is not None and keywords != "":
             tags.append(f"-XMP-dc:Subject={keywords}")
+
+    if created:
+        tags.append("-XMP-crs:all=")
 
     if existed:
         # A sidecar from an earlier run can still carry that run's reject

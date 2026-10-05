@@ -249,13 +249,31 @@ Folder" in Lightroom is NOT enough** to pull in the new metadata for photos
 already in the catalog — it only detects added/removed files, not changed
 sidecars. To actually load the new rating/keywords:
 
+- Back up the catalog first
 - Select the affected photos in the Library grid
 - Right-click → **Metadata → Read Metadata from File**
-- Confirm the overwrite warning
+- Confirm the overwrite warning ("Import Settings from Disk")
 
 If keywords/ratings look correct in the XMP file via exiftool but don't
 show up in Lightroom after a sync, this is almost always the cause — check
 here before assuming the write step failed.
+
+**This step can wipe the photo's Lightroom edits.** Import Settings from
+Disk makes the sidecar the source of truth, develop settings included, and
+Lightroom keeps edits in the catalog, not in the sidecar (unless "Write
+changes into XMP" is on). `write_sidecar` creates new sidecars with
+`exiftool -o raw sidecar`, which copies the RAW's embedded metadata,
+including its Camera Raw defaults (`XMP-crs:ColorTemperature=5200`,
+`ToneCurve=Standard`) - Wade's 2026-09-18 Italy photos all got those, and
+importing them reset his edits. So `write_sidecar` now deletes
+`XMP-crs:all` from sidecars it *creates* (a delete in the same `-o` command
+doesn't take; it's a separate tag-write step), and never touches an
+existing sidecar's `crs:` data since that may be real Lightroom edits.
+Even so, how Lightroom treats a sidecar with no develop section is
+untested - before a whole folder, try one already-edited photo, and have a
+catalog backup. Sidecars from before this fix still carry the `crs:`
+defaults (2026-09-18 does) and still need cleaning before anyone imports
+them over edited photos.
 
 ## Backlog
 
