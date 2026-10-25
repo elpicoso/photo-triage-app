@@ -262,7 +262,15 @@ def write_sidecar(raw_path, rating=None, reject=False, keywords=None, reject_rea
         if rating is not None and rating != "":
             tags.append(f"-XMP-xmp:Rating={rating}")
         if keywords is not None and keywords != "":
-            tags.append(f"-XMP-dc:Subject={keywords}")
+            # One dc:subject item per keyword. A single "a, b, c" string is
+            # one item, which Lightroom can take as one long keyword (and
+            # which makes tags like gallery-candidate unfilterable).
+            items = [k.strip() for k in str(keywords).split(",") if k.strip()]
+            if items:
+                # Assigned as one whole list (-sep splits it into items), so
+                # a rewrite REPLACES the old keywords - "-Subject=" followed
+                # by "+=" in one command kept the old items and piled up.
+                tags.extend(["-sep", "|||", "-XMP-dc:Subject=" + "|||".join(items)])
 
     if created:
         tags.append("-XMP-crs:all=")
@@ -274,10 +282,19 @@ def write_sidecar(raw_path, rating=None, reject=False, keywords=None, reject_rea
         # them. Only clear what this app writes: a red label, or a caption
         # starting "Rejected:"; anything else was set in Lightroom.
         current = subprocess.run(
-            ["exiftool", "-j", "-XMP-xmp:Label", "-XMP-dc:Description", xmp_path],
+            ["exiftool", "-j", "-XMP-xmp:Label", "-XMP-dc:Description",
+             "-XMP-crs:all", xmp_path],
             capture_output=True, text=True,
         ).stdout
         info = (json.loads(current) or [{}])[0] if current.strip() else {}
+        # A sidecar created by an interrupted earlier call (killed between
+        # creating it and stripping the RAW's copied defaults) is left with
+        # exactly the two camera-default develop tags. Real Lightroom edits
+        # always carry more (Version, ProcessVersion, Exposure2012, ...), so
+        # that exact signature is safe to clear.
+        develop = {k for k in info if k not in ("SourceFile", "Label", "Description")}
+        if develop == {"ColorTemperature", "ToneCurve"} and info.get("ToneCurve") == "Standard":
+            tags.append("-XMP-crs:all=")
         if not reject and info.get("Label") == "Red":
             tags.append("-XMP-xmp:Label=")
         if str(info.get("Description", "")).startswith("Rejected:") and not (reject and reject_reason):

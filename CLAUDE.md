@@ -287,6 +287,19 @@ field it's still being asked to fill in.
   score, and a one-click "Use this instead" swap instead of trusting the
   auto-pick silently.
 
+- Keywords go into `XMP-dc:Subject` as one item PER keyword (the form's
+  comma-separated text is split in `write_sidecar`, assigned with `-sep`).
+  They were originally written as a single "a, b, c" string - one bag item,
+  which Lightroom can import as one long keyword and which makes tags like
+  `gallery-candidate` unfilterable. Use `-sep` + one whole-list assignment:
+  `-Subject=` followed by `-Subject+=x` in the same command does NOT
+  replace the old list (items piled up across rewrites). Sidecars written
+  before 2026-10-25 still hold the single-string form (2026-09-18 does).
+  `write_sidecar` also clears a sidecar's `crs:` tags when they are exactly
+  the two camera defaults (ColorTemperature + ToneCurve=Standard) - the
+  leftover from a create that was killed before the strip step - but never
+  anything with more develop keys than that.
+
 ## Lightroom import gotcha
 
 After running `/write` and confirming XMP sidecars have the expected data
