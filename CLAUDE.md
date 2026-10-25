@@ -103,6 +103,19 @@ or got removed) — do the manual steps above until/unless it's recreated.
   `pdf:Keywords` on a freshly created sidecar. No `-IPTC:Keywords` tag —
   IPTC-IIM has no home in a bare `.xmp` file, so exiftool silently no-ops
   that write; Lightroom's Keywords panel reads `XMP-dc:Subject` anyway).
+- Rating/gallery: the default rating criteria score technical quality AND
+  interestingness (documentary/record shots capped at 3; most photos 2-3, 4
+  sparingly, 5 rarely), judging what a photo could become with a reasonable
+  edit but not flaws editing can't fix. With Rate checked, triage also
+  returns `gallery` = yes / with edits / no (CSV column, editable on the
+  review page); `/write` merges it into the keywords as `gallery-candidate`
+  / `gallery-with-edits` (`with_gallery_keyword()` in app.py, follows the
+  Keywords checkbox). The default reject criteria were softened to match:
+  don't reject exposure/white-balance/tilt problems that editing can fix
+  when the subject or light is interesting - otherwise "with edits" photos
+  would already be rejected. Previews are in-camera JPEGs, so Claude can't
+  see how much detail the RAW can recover; "with edits" calls on dark
+  frames are educated guesses.
 - `triage.py` — calls the Claude API (model/batch size/preview size from
   `config.load_settings()`) in batches to get reject/rating/keyword
   suggestions per image. Preview JPEGs are downscaled (Pillow) to

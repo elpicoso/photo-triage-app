@@ -27,13 +27,33 @@ DEFAULT_SHOOT_CONTEXT = "a shoot with a variety of subjects and techniques"
 # follows for each field - editable via the Settings page so they can be
 # tuned (e.g. reject tolerance, keyword style) without a code change.
 DEFAULT_REJECT_CRITERIA = (
-    '"yes" if technically bad for its type of shot (blurry or out of focus '
-    "where sharpness matters, accidental blown highlights or crushed shadows, "
-    "poorly composed). Deliberate technique is NOT a reject: long exposures, "
-    "star trails, intentional motion blur, low-key or silhouette exposures, "
-    "shallow depth of field."
+    '"yes" if technically bad for its type of shot in a way editing cannot '
+    "fix (missed focus, camera shake, a missing or cut-off subject, "
+    "unrecoverably blown highlights). Do NOT reject a photo whose only "
+    "problem is exposure, white balance, or tilt that a reasonable edit "
+    "could fix, if its subject or light is interesting. Deliberate technique "
+    "is also NOT a reject: long exposures, star trails, intentional motion "
+    "blur, low-key or silhouette exposures, shallow depth of field."
 )
-DEFAULT_RATING_CRITERIA = "1-5 stars if kept (use 0 if rejected)"
+DEFAULT_RATING_CRITERIA = (
+    "1-5 stars if kept (use 0 if rejected). Rate technical quality AND how "
+    "interesting the photo is: distinctive light, a compelling subject, "
+    "strong composition, a moment or mood that makes someone stop and look. "
+    "Judge the photo for what it could become with a reasonable edit "
+    "(exposure, white balance, highlights/shadows, straightening, "
+    "cropping), but not for flaws editing can't fix (missed focus, camera "
+    "shake, a missing subject, clipped highlights). Photos that merely "
+    "document a place or event (record shots, the angle anyone would take) "
+    "are capped at 3 however clean. "
+    "5 = gallery-worthy as shot, or needing only light edits; rare, a few "
+    "percent at most. "
+    "4 = strong keeper, or has a clear path to gallery quality with edits. "
+    "3 = solid but ordinary, or a documentary/record shot. "
+    "2 = weak but usable: flawed or uninteresting. "
+    "1 = marginal; kept only for completeness. "
+    "Be conservative: most photos should land at 2-3; use 4 sparingly and "
+    "5 rarely."
+)
 DEFAULT_KEYWORD_CRITERIA = (
     "5-8 specific, descriptive keywords, comma-separated "
     '(e.g. "Milky Way, granite boulders, long exposure" not "nature, sky")'

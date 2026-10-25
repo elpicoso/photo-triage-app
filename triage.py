@@ -50,7 +50,15 @@ def build_prompt(
         fields.append('"reject_reason": "..."')
     if do_rating:
         instructions.append(f"- rating: {rating_criteria}")
+        instructions.append(
+            '- gallery: "yes" if gallery-worthy as shot (or after only a light '
+            'touch-up); "with edits" if the subject, light or moment is strong '
+            "and a reasonable edit (exposure, white balance, crop, straighten) "
+            'would get it there; otherwise "no". Generic, documentary or '
+            'record shots are "no", and so is anything you rejected.'
+        )
         fields.append('"rating": 0-5')
+        fields.append('"gallery": "yes/with edits/no"')
     if do_keywords:
         instructions.append(f"- keywords: {keyword_criteria}")
         fields.append('"keywords": "..."')
@@ -134,6 +142,7 @@ def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True):
         row.setdefault("reject", "")
         row.setdefault("reject_reason", "")
         row.setdefault("rating", "")
+        row.setdefault("gallery", "")
         row.setdefault("keywords", "")
     return parsed
 
@@ -183,6 +192,7 @@ def triage_folder(
                 "reject": "",
                 "reject_reason": "",
                 "rating": "",
+                "gallery": "",
                 "keywords": "",
                 "duplicate_of": duplicate_of.get(os.path.basename(p), ""),
             }
@@ -211,6 +221,7 @@ def triage_folder(
                         "reject": "",
                         "reject_reason": "",
                         "rating": "",
+                        "gallery": "",
                         "keywords": f"ERROR: {e}",
                     }
                 )
@@ -234,6 +245,7 @@ def triage_folder(
                     "reject": "yes",
                     "reject_reason": f"Duplicate of {duplicate_of[fname]}",
                     "rating": "",
+                    "gallery": "",
                     "keywords": "",
                     "duplicate_of": duplicate_of[fname],
                 }

@@ -490,6 +490,7 @@ def triage(folder):
                     "reject",
                     "reject_reason",
                     "rating",
+                    "gallery",
                     "keywords",
                     "duplicate_of",
                 ],
@@ -596,6 +597,25 @@ def preview_image(folder, filename):
     return send_file(target, mimetype="image/jpeg")
 
 
+GALLERY_KEYWORDS = {"yes": "gallery-candidate", "with edits": "gallery-with-edits"}
+
+
+def with_gallery_keyword(keywords, gallery):
+    """Add the gallery tag to a photo's keyword list so it's filterable in
+    Lightroom (gallery-candidate: as shot; gallery-with-edits: needs an
+    edit). Written with the other keywords, so it follows the Keywords
+    checkbox. Any stale gallery tag already in the field is replaced."""
+    tag = GALLERY_KEYWORDS.get((gallery or "").strip().lower())
+    kept = [
+        k.strip()
+        for k in (keywords or "").split(",")
+        if k.strip() and k.strip() not in GALLERY_KEYWORDS.values()
+    ]
+    if tag:
+        kept.append(tag)
+    return ", ".join(kept)
+
+
 @app.route("/write/<path:folder>", methods=["POST"])
 def write(folder):
     # Writing a whole folder is slow over SMB (a couple of exiftool calls
@@ -616,11 +636,12 @@ def write(folder):
 
     # Copy everything out of the request now - the thread outlives it.
     jobs = []
-    for filename, reject, reason, rating, keywords in zip(
+    for filename, reject, reason, rating, gallery, keywords in zip(
         request.form.getlist("filename"),
         request.form.getlist("reject"),
         request.form.getlist("reject_reason"),
         request.form.getlist("rating"),
+        request.form.getlist("gallery"),
         request.form.getlist("keywords"),
     ):
         # Resolve the RAW by name stem from what's actually in the folder,
@@ -635,7 +656,7 @@ def write(folder):
                 raw_path,
                 rating if do_rating else None,
                 reject.strip().lower() == "yes",
-                keywords if do_keywords else None,
+                with_gallery_keyword(keywords, gallery) if do_keywords else None,
                 reason.strip(),
             )
         )

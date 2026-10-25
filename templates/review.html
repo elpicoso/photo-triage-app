@@ -168,6 +168,7 @@
             <th>Reject</th>
             <th>Why rejected</th>
             <th>Rating</th>
+            <th>Gallery</th>
             <th>Keywords</th>
           </tr>
         </thead>
@@ -204,6 +205,14 @@
             </td>
             <td>
               <input type="text" name="rating" value="{{ row.rating }}">
+            </td>
+            <td>
+              <select name="gallery">
+                <option value="" {{ 'selected' if not row.gallery }}></option>
+                <option value="no" {{ 'selected' if row.gallery == 'no' }}>No</option>
+                <option value="with edits" {{ 'selected' if row.gallery == 'with edits' }}>With edits</option>
+                <option value="yes" {{ 'selected' if row.gallery == 'yes' }}>Yes</option>
+              </select>
             </td>
             <td>
               <input type="text" name="keywords" value="{{ row.keywords }}">
