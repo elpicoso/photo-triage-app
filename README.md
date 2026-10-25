@@ -201,9 +201,21 @@ photo):
 4. Now **Read Metadata from File**. If it asks, choose **Import Settings
    from Disk** - the sidecars contain your edits, so nothing is reset.
 
-Photos with no edits can skip all of this. Turning on Lightroom's
-*Catalog Settings → Metadata → Automatically write changes into XMP* keeps
-sidecars carrying your edits from then on.
+Photos with no edits can skip all of this.
+
+**Be careful with Lightroom's *Catalog Settings → Metadata → Automatically
+write changes into XMP*.** It does keep sidecars carrying your edits, but the
+moment it is switched on Lightroom writes metadata for **every photo in the
+catalog** - rewriting existing sidecars, creating new ones next to every
+RAW, and writing *into* JPEG/TIFF/PSD/PNG/DNG files themselves. On a large
+library (tens of thousands of photos, especially on a network volume) that
+runs for hours, makes Lightroom crawl, adds a sidecar beside every raw file,
+and may overwrite the app's freshly written ratings and keywords with the
+catalog's values before you import them. If you want it, turn it on
+deliberately - when Lightroom isn't needed for a while and the app has no
+folder waiting to be imported - and expect it to run for a long time; you can
+untick it to stop. Otherwise leave it off and use the **Save Metadata to
+File** order above for photos you've edited.
 
 Worth spot-checking one file's actual XMP output before trusting a big
 batch: `exiftool -G1 -a -s path/to/file.xmp`.

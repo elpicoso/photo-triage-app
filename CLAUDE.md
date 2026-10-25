@@ -359,7 +359,17 @@ Settings from Disk". Lightroom's Save can land minutes after the command
 For a folder already imported once, take a copy of the sidecars BEFORE
 reprocessing and pass it as `--previous`: the catalog then holds the old app's
 values, and the tool uses the copy to tell old-app values (replaced) from
-the user's own (kept). Red label always follows the app. Wade's overriding
+the user's own (kept). Red label always follows the app. Do NOT suggest turning on
+Lightroom's "Automatically write changes into XMP": enabling it makes
+Lightroom write XMP for the WHOLE catalog (Wade's: 86,879 photos, ~75k RAW on
+the volume, plus ~35k JPEG/TIFF/PSD/DNG/HEIC files it would write INTO).
+On 2026-10-25 it ran for over an hour at ~300-600 sidecars/min, froze
+Lightroom's UI, created ~12k sidecars next to old RAWs (2009-2011) before he
+stopped it, and could have overwritten the app's new ratings in a folder
+awaiting import (the app should snapshot the folder's sidecars before any
+such pass). It had been recommended as a way to keep edits on disk and
+described, wrongly, as only affecting future edits. Use the Save-Metadata-
+first workflow instead. Wade's overriding
 rule: never lose his edits - back up the catalog first and
 test on one photo.
 
