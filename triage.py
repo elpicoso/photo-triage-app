@@ -51,15 +51,18 @@ def build_prompt(
     if do_rating:
         instructions.append(f"- rating: {rating_criteria}")
         instructions.append(
-            '- gallery: a separate judgment from rating - would this hang in a '
-            'gallery? Hold a high bar: roughly 5% of photos "yes", under 10% '
-            '"with edits", the rest "no". "yes" = gallery-worthy as shot (or '
-            'after a light touch-up). "with edits" = a specific strong subject, '
-            "light or moment is held back only by something a reasonable edit "
-            "fixes (exposure, white balance, crop, straighten) - it can be "
-            'one that rates only 3 as it stands. "no" = everything else: '
-            "competent, generic, documentary or record shots, and anything "
-            "you rejected."
+            '- gallery: a separate judgment from rating - would this photograph '
+            'hang in a gallery? Judge the photograph, not how famous its '
+            'subject is (a straight shot of a known artwork or landmark is '
+            'documentation). Most photos are "no". "yes" only if the photo '
+            "already has distinctive light, a strong composition, or a moment "
+            "most people would not have captured (a light touch-up is fine). "
+            '"with edits" only if one of those qualities is clearly there but '
+            "held back by something you could name that a reasonable edit "
+            "fixes (exposure, white balance, crop, straighten) - it can be a "
+            'photo that rates only 3 as it stands. "no" for everything '
+            "else: competent, generic, documentary or record shots, and "
+            "anything you rejected."
         )
         fields.append('"rating": 0-5')
         fields.append('"gallery": "yes/with edits/no"')

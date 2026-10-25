@@ -107,7 +107,11 @@ or got removed) — do the manual steps above until/unless it's recreated.
   interestingness (documentary/record shots capped at 3; most photos 2-3, 4
   sparingly, 5 rarely) without penalizing edit-fixable problems. With Rate
   checked, triage also returns `gallery` = yes / with edits / no, a
-  SEPARATE judgment held to a high bar (~5% yes, <10% with edits). It was
+  SEPARATE judgment held to a high bar. First tried as percentage
+  targets (~5% yes, <10% with edits): Haiku 4.5 overshot (12% / 23%) and
+  rated famous artworks (School of Athens) for the subject's fame, not the
+  photograph - hence the concrete tests and "judge the photograph, not how
+  famous its subject is" in both prompts, and Sonnet 5.5 as the model. It was
   first tied to the rating ("4 = clear path to gallery with edits") and the
   trial on 2026-09-19 showed the two moved in lockstep (all 4s were "with
   edits", all 5s "yes"; 38% of photos tagged) - redundant and not a usable
