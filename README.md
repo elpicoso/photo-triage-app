@@ -192,7 +192,9 @@ photo):
    then `--apply`). If the folder was imported into Lightroom before, also
    pass `--previous <old-backup-dir>` - a copy of the sidecars from the app's
    previous run - so the old app ratings and Red labels still sitting in the
-   catalog aren't mistaken for your own. It puts the app's ratings, red reject labels, captions
+   catalog aren't mistaken for your own. Add `--keep-rating name1,name2` to
+   keep your current rating on specific photos (for example the ones you've
+   edited heavily - the dry run's plan shows old -> new for each). It puts the app's ratings, red reject labels, captions
    and keywords back **without overriding anything you set in Lightroom**
    (your ratings, other color labels and captions win; keywords are merged),
    and never touches develop settings.

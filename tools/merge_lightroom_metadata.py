@@ -13,6 +13,9 @@ user set in Lightroom.
                  the folder was imported into Lightroom before: the catalog
                  then still holds the old app values (old ratings, stale Red
                  labels), and without this they'd be mistaken for the user's own
+  --keep-rating  comma-separated photo names (e.g. 1D5A5068,_MG_0525) whose
+                 current rating is yours: it is kept even where it matches the
+                 old snapshot. Everything else about those photos still merges.
   --apply        write (default is a dry run that prints the plan per photo)
 
 Only sidecars containing real Lightroom develop data (crs:Version) are
@@ -45,6 +48,11 @@ if "--previous" in sys.argv:
     i = sys.argv.index("--previous")
     previous = sys.argv[i + 1]
     args = [a for a in args if a != previous]
+keep_rating = set()
+if "--keep-rating" in sys.argv:
+    i = sys.argv.index("--keep-rating")
+    keep_rating = {n.strip() for n in sys.argv[i + 1].split(",") if n.strip()}
+    args = [a for a in args if a != sys.argv[i + 1]]
 folder, backup = args[0], args[1]
 FIELDS = ["-XMP-xmp:Rating", "-XMP-xmp:Label", "-XMP-dc:Description", "-XMP-dc:Subject", "-XMP-crs:Version"]
 
@@ -92,6 +100,8 @@ for name in names:
         if have["rating"] != -1:
             out.append("-XMP-xmp:Rating=-1")
             notes.append("rating -1 (reject)")
+    elif want["rating"] is not None and have["rating"] != want["rating"] and name[:-4] in keep_rating:
+        notes.append(f"KEPT your rating {have['rating']} (you asked to keep it; app had {want['rating']})")
     elif want["rating"] is not None and have["rating"] != want["rating"]:
         stale = have["rating"] in (None, 0) or have["rating"] == -1 or (
             old is not None and have["rating"] == old["rating"]
