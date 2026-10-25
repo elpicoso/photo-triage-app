@@ -189,7 +189,10 @@ photo):
    into the sidecars - but also replaces the app's ratings/keywords with the
    catalog's.
 3. Run `tools/merge_lightroom_metadata.py <folder> <backup-dir>` (dry run,
-   then `--apply`). It puts the app's ratings, red reject labels, captions
+   then `--apply`). If the folder was imported into Lightroom before, also
+   pass `--previous <old-backup-dir>` - a copy of the sidecars from the app's
+   previous run - so the old app ratings and Red labels still sitting in the
+   catalog aren't mistaken for your own. It puts the app's ratings, red reject labels, captions
    and keywords back **without overriding anything you set in Lightroom**
    (your ratings, other color labels and captions win; keywords are merged),
    and never touches develop settings.

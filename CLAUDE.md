@@ -356,7 +356,11 @@ Settings from Disk". Lightroom's Save can land minutes after the command
 (background write over many files), so re-check which sidecars have
 `XMP-crs:Version` before merging. Run the script on the Mac against
 `/Volumes/<volume>/...` (fast local disk), not via the Pi's SMB mount.
-Wade's overriding rule: never lose his edits - back up the catalog first and
+For a folder already imported once, take a copy of the sidecars BEFORE
+reprocessing and pass it as `--previous`: the catalog then holds the old app's
+values, and the tool uses the copy to tell old-app values (replaced) from
+the user's own (kept). Red label always follows the app. Wade's overriding
+rule: never lose his edits - back up the catalog first and
 test on one photo.
 
 **This step can wipe the photo's Lightroom edits.** Import Settings from

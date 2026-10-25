@@ -1,34 +1,51 @@
-"""Merge the app's triage metadata back into sidecars that Lightroom has since
+"""Merge the app's triage metadata into sidecars that Lightroom has since
 re-saved (they now carry develop settings), WITHOUT overriding anything the
 user set in Lightroom.
 
-  merge_lightroom_metadata.py <folder> <backup_dir>            dry run (prints the plan per photo)
-  merge_lightroom_metadata.py <folder> <backup_dir> --apply    write
+  merge_lightroom_metadata.py <folder> <new_backup> [--previous <old_backup>] [--apply]
 
-<backup_dir> is a copy of the folder's .xmp files made BEFORE Lightroom's
-"Save Metadata to File" (see the README's workflow for already-edited photos).
-Run it where exiftool can read the folder - the Mac, against the photo volume,
-is much faster than going through the Pi's SMB mount.
+  <folder>       the photos' folder (run it where exiftool can read it - the
+                 Mac, against the photo volume, is much faster than the Pi's
+                 SMB mount)
+  <new_backup>   a copy of the folder's .xmp files made after the app wrote its
+                 NEW results and BEFORE Lightroom's "Save Metadata to File"
+  --previous     a copy of the sidecars from the app's PREVIOUS run. Needed when
+                 the folder was imported into Lightroom before: the catalog
+                 then still holds the old app values (old ratings, stale Red
+                 labels), and without this they'd be mistaken for the user's own
+  --apply        write (default is a dry run that prints the plan per photo)
 
-Only sidecars that contain real Lightroom develop data (crs:Version) are
-considered; the rest already hold the app's output untouched.
+Only sidecars containing real Lightroom develop data (crs:Version) are
+considered; the rest still hold the app's output untouched. Develop (crs) data
+is never touched.
 
-Policy (Lightroom's value wins whenever the user could have set one):
-  Rating       reject (-1) from the app is applied; otherwise the app's rating is used
-               only if the sidecar has none (0/unset). A different rating is kept.
-  Label        the app's Red (reject) is applied only if there is no label or it is Red.
-               Any other label (e.g. Purple) is kept; a non-reject never loses its label.
-  Description  the app's caption is used only if the sidecar has none.
-  Subject      union: the sidecar's keywords plus the app's, de-duplicated.
-Develop (crs) data is never touched.
+Policy ("have" = the sidecar now, i.e. Lightroom's catalog):
+  Rating       reject (-1) from the app is applied. Otherwise the app's rating is
+               used when the sidecar has none, or - with --previous - when it
+               still equals the old app's rating (or a stale reject). A different
+               rating is the user's own and is kept.
+  Label        Red follows the app (the app's reject marker): added for rejects,
+               removed from photos that are no longer rejects. Any other label
+               (Purple, ...) is kept.
+  Description  an app caption ("Rejected: ...") is replaced by the new one (or
+               cleared); a caption the user wrote is kept, and the app's is only
+               added where there is none.
+  Subject      the sidecar's keywords minus the OLD app's keywords (with
+               --previous), plus the new app's; keywords you added stay.
 """
 import json
 import os
 import subprocess
 import sys
 
-folder, backup = sys.argv[1], sys.argv[2]
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
 apply = "--apply" in sys.argv
+previous = None
+if "--previous" in sys.argv:
+    i = sys.argv.index("--previous")
+    previous = sys.argv[i + 1]
+    args = [a for a in args if a != previous]
+folder, backup = args[0], args[1]
 FIELDS = ["-XMP-xmp:Rating", "-XMP-xmp:Label", "-XMP-dc:Description", "-XMP-dc:Subject", "-XMP-crs:Version"]
 
 
@@ -48,6 +65,15 @@ def read(path):
     }
 
 
+def keyword_items(subject):
+    """Individual keywords, also splitting an old single 'a, b, c' string."""
+    items = []
+    for s in subject:
+        items.append(s.strip())
+        items.extend(k.strip() for k in s.split(",") if k.strip())
+    return items
+
+
 names = sorted(f for f in os.listdir(backup) if f.endswith(".xmp") and not f.startswith("."))
 touched = 0
 for name in names:
@@ -58,47 +84,65 @@ for name in names:
     if not have["has_develop"]:
         continue  # still the app's own sidecar - nothing to merge
     want = read(os.path.join(backup, name))
-    args, notes = [], []
+    old = read(os.path.join(previous, name)) if previous and os.path.exists(os.path.join(previous, name)) else None
+    out, notes = [], []
 
+    # --- rating
     if want["rating"] == -1:
         if have["rating"] != -1:
-            args.append("-XMP-xmp:Rating=-1")
+            out.append("-XMP-xmp:Rating=-1")
             notes.append("rating -1 (reject)")
-    elif want["rating"] is not None:
-        if have["rating"] in (None, 0):
-            args.append(f"-XMP-xmp:Rating={want['rating']}")
-            notes.append(f"rating {want['rating']} (app)")
-        elif have["rating"] != want["rating"]:
+    elif want["rating"] is not None and have["rating"] != want["rating"]:
+        stale = have["rating"] in (None, 0) or have["rating"] == -1 or (
+            old is not None and have["rating"] == old["rating"]
+        )
+        if stale:
+            out.append(f"-XMP-xmp:Rating={want['rating']}")
+            notes.append(f"rating {have['rating'] or 0} -> {want['rating']} (app)")
+        else:
             notes.append(f"KEPT your rating {have['rating']} (app had {want['rating']})")
 
+    # --- label
     if want["label"] == "Red":
         if have["label"] in (None, "Red"):
             if have["label"] != "Red":
-                args.append("-XMP-xmp:Label=Red")
+                out.append("-XMP-xmp:Label=Red")
                 notes.append("label Red (reject)")
         else:
             notes.append(f"KEPT your label {have['label']} (app wanted Red)")
+    elif have["label"] == "Red":
+        out.append("-XMP-xmp:Label=")
+        notes.append("removed stale Red label (no longer a reject)")
     elif have["label"]:
         notes.append(f"kept your label {have['label']}")
 
-    if want["description"] and not have["description"]:
-        args.append(f"-XMP-dc:Description={want['description']}")
+    # --- description
+    have_d, want_d = have["description"], want["description"]
+    if have_d and have_d.startswith("Rejected:"):
+        if have_d != (want_d or ""):
+            out.append(f"-XMP-dc:Description={want_d or ''}")
+            notes.append("caption updated" if want_d else "stale reject caption removed")
+    elif not have_d and want_d:
+        out.append(f"-XMP-dc:Description={want_d}")
         notes.append("caption (app)")
-    elif have["description"] and have["description"] != want["description"]:
+    elif have_d and have_d != want_d:
         notes.append("kept your caption")
 
-    merged = list(have["subject"])
+    # --- keywords
+    old_items = {k.lower() for k in keyword_items(old["subject"])} if old else set()
+    user_extra = [k for k in have["subject"] if k.lower() not in old_items and "," not in k]
+    merged = list(want["subject"])
     lower = {k.lower() for k in merged}
-    added = [k for k in want["subject"] if k.lower() not in lower]
-    if added:
-        merged += added
-        args += ["-sep", "|||", "-XMP-dc:Subject=" + "|||".join(merged)]
-        notes.append(f"keywords: kept {len(have['subject'])}, added {len(added)}")
+    merged += [k for k in user_extra if k.lower() not in lower]
+    if merged and merged != have["subject"]:
+        out += ["-sep", "|||", "-XMP-dc:Subject=" + "|||".join(merged)]
+        kept_user = len([k for k in merged if k.lower() not in {x.lower() for x in want["subject"]}])
+        notes.append(f"keywords: {len(want['subject'])} from app" + (f" + {kept_user} of yours" if kept_user else ""))
 
     print(f"{name}: " + ("; ".join(notes) if notes else "nothing to change"))
-    if args:
+    if out:
         touched += 1
         if apply:
-            subprocess.run(["exiftool", "-overwrite_original", "-q", *args, cur_path], check=True)
+            subprocess.run(["exiftool", "-overwrite_original", "-q", *out, cur_path], check=True)
 
-print(("APPLIED" if apply else "DRY RUN"), "- Lightroom-saved sidecars changed:" if apply else "- would change:", touched)
+print(("APPLIED" if apply else "DRY RUN"), "- sidecars changed:" if apply else "- would change:", touched)
