@@ -62,6 +62,26 @@ DEFAULT_KEYWORD_CRITERIA = (
 SETTINGS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")
 
 
+def get_defaults():
+    """The code/env defaults (what load_settings() returns with no
+    settings.json) - shown on the Settings page so a field can be reset to
+    them. A saved settings.json freezes whatever text was in the form at the
+    time, so later changes to these defaults don't reach an install unless
+    its fields are reset."""
+    return {
+        "raw_root": DEFAULT_RAW_ROOT,
+        "triage_model": DEFAULT_TRIAGE_MODEL,
+        "batch_size": DEFAULT_BATCH_SIZE,
+        "max_preview_dimension": DEFAULT_MAX_PREVIEW_DIMENSION,
+        "raw_extensions": DEFAULT_RAW_EXTENSIONS,
+        "shoot_context": DEFAULT_SHOOT_CONTEXT,
+        "duplicate_threshold": DEFAULT_DUPLICATE_THRESHOLD,
+        "reject_criteria": DEFAULT_REJECT_CRITERIA,
+        "rating_criteria": DEFAULT_RATING_CRITERIA,
+        "keyword_criteria": DEFAULT_KEYWORD_CRITERIA,
+    }
+
+
 def load_settings():
     """Runtime-editable overrides written by the /settings page. Read fresh
     on every call (cheap - it's a tiny local file) so edits take effect

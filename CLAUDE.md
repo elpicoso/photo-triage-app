@@ -164,6 +164,15 @@ to `settings.json`, takes effect on the next request, no restart needed.
 `ANTHROPIC_API_KEY` is deliberately NOT here (see Infrastructure above) —
 it stays secret-only, in the systemd unit file.
 
+Saving the page writes EVERY field to `settings.json`, so the text in the
+form at that moment (criteria included) is frozen there: later changes to
+the defaults in `config.py` don't reach a machine that has saved once. Each
+field therefore has a "Reset to default" link (shown only when it differs
+from `config.get_defaults()`, via `data-default`) and there's a "Reset all
+to defaults" button; both only fill the form - nothing is saved until Save.
+The Pi has had a `settings.json` since 2026-10-25 (triage model set to
+`claude-sonnet-5-5` there).
+
 `shoot_context` is the one-line framing ("a shoot with a variety of subjects
 and techniques" by default - Wade shoots everything; the prompt makes
 Claude identify each photo's `subject` first and judge it against that

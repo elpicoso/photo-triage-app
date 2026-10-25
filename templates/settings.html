@@ -55,6 +55,22 @@
     color: var(--muted);
     margin-bottom: 0.35rem;
   }
+  .field .reset {
+    display: none;
+    float: right;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--amber);
+    font-size: 0.72rem;
+    text-transform: none;
+    letter-spacing: normal;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .field.customized .reset { display: inline; }
+  .reset-all { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 500; margin-bottom: 1.25rem; }
+  .reset-all:hover { color: var(--text); border-color: var(--amber-dim); background: transparent; }
   .field .hint {
     display: block;
     font-size: 0.78rem;
@@ -197,10 +213,11 @@
     {% endif %}
 
     <form method="post">
+      <button type="button" class="reset-all" id="reset-all">Reset all to defaults</button>
       <div class="field">
         <label for="raw_root">RAW root</label>
         <div class="field-with-button">
-          <input type="text" id="raw_root" name="raw_root" value="{{ values.raw_root }}">
+          <input type="text" id="raw_root" name="raw_root" data-default="{{ defaults.raw_root }}" value="{{ values.raw_root }}">
           <button type="button" class="browse-btn" onclick="openBrowser()">Browse&hellip;</button>
         </div>
         <span class="hint">Top of the browsable photo tree (the SMB mount point on the Pi, e.g. /mnt/photos).</span>
@@ -216,25 +233,25 @@
 
       <div class="field">
         <label for="raw_extensions">RAW extensions</label>
-        <input type="text" id="raw_extensions" name="raw_extensions" value="{{ values.raw_extensions }}">
+        <input type="text" id="raw_extensions" name="raw_extensions" data-default="{{ defaults.raw_extensions }}" value="{{ values.raw_extensions }}">
         <span class="hint">Comma-separated. Used to detect shoot folders and their RAW extension automatically.</span>
       </div>
 
       <div class="field">
         <label for="triage_model">Triage model</label>
-        <input type="text" id="triage_model" name="triage_model" value="{{ values.triage_model }}">
+        <input type="text" id="triage_model" name="triage_model" data-default="{{ defaults.triage_model }}" value="{{ values.triage_model }}">
         <span class="hint">Anthropic model ID used for reject/rating/keyword suggestions.</span>
       </div>
 
       <div class="row">
         <div class="field">
           <label for="batch_size">Batch size &mdash; max 100/request</label>
-          <input type="number" id="batch_size" name="batch_size" min="1" value="{{ values.batch_size }}">
+          <input type="number" id="batch_size" name="batch_size" data-default="{{ defaults.batch_size }}" min="1" value="{{ values.batch_size }}">
           <span class="hint">Images sent per API call. Anthropic caps requests at 100 images for 200k-context models (the Haiku default) or 600 for 1M-context models (Opus, Sonnet 5, Fable 5) &mdash; but the 32MB total request-size limit is usually the real ceiling first, which is why previews are downscaled (see Max preview dimension). Batches above 20 images also require each image to stay under 2000px on its long edge.</span>
         </div>
         <div class="field">
           <label for="max_preview_dimension">Max preview dimension &mdash; max 8000px</label>
-          <input type="number" id="max_preview_dimension" name="max_preview_dimension" min="1" value="{{ values.max_preview_dimension }}">
+          <input type="number" id="max_preview_dimension" name="max_preview_dimension" data-default="{{ defaults.max_preview_dimension }}" min="1" value="{{ values.max_preview_dimension }}">
           <span class="hint">Long edge, in pixels, previews are downscaled to before sending. The API hard-rejects any image over 8000px, but Claude itself only uses up to 1568px (standard models) or 2576px (Claude 4.7+ high-resolution tier) &mdash; anything larger than your model's tier is wasted bandwidth, not added fidelity.</span>
         </div>
       </div>
@@ -243,31 +260,31 @@
 
       <div class="field">
         <label for="shoot_context">Shoot context</label>
-        <input type="text" id="shoot_context" name="shoot_context" value="{{ values.shoot_context }}">
-        <span class="hint">Sent as "Review these N photos from &lt;this&gt;." Change it to match what you actually shoot, e.g. "a wedding" or "a sports event" &mdash; the reject/rating/keyword criteria below assume landscape/astro by default, so revisit those too if you change this.</span>
+        <input type="text" id="shoot_context" name="shoot_context" data-default="{{ defaults.shoot_context }}" value="{{ values.shoot_context }}">
+        <span class="hint">Sent as "Review these N photos from &lt;this&gt;." Change it to match what you actually shoot, e.g. "a wedding" or "a sports event" &mdash; the criteria below are written to be genre-neutral, so revisit them too if you narrow this to one kind of shoot.</span>
       </div>
 
       <div class="field">
         <label for="reject_criteria">Reject criteria</label>
-        <textarea id="reject_criteria" name="reject_criteria" rows="3">{{ values.reject_criteria }}</textarea>
+        <textarea id="reject_criteria" name="reject_criteria" data-default="{{ defaults.reject_criteria }}" rows="3">{{ values.reject_criteria }}</textarea>
         <span class="hint">Sent verbatim as the "reject:" instruction when Flag rejects is selected at triage time.</span>
       </div>
 
       <div class="field">
         <label for="rating_criteria">Rating criteria</label>
-        <textarea id="rating_criteria" name="rating_criteria" rows="2">{{ values.rating_criteria }}</textarea>
+        <textarea id="rating_criteria" name="rating_criteria" data-default="{{ defaults.rating_criteria }}" rows="2">{{ values.rating_criteria }}</textarea>
         <span class="hint">Sent verbatim as the "rating:" instruction when Rate is selected at triage time.</span>
       </div>
 
       <div class="field">
         <label for="keyword_criteria">Keyword criteria</label>
-        <textarea id="keyword_criteria" name="keyword_criteria" rows="3">{{ values.keyword_criteria }}</textarea>
+        <textarea id="keyword_criteria" name="keyword_criteria" data-default="{{ defaults.keyword_criteria }}" rows="3">{{ values.keyword_criteria }}</textarea>
         <span class="hint">Sent verbatim as the "keywords:" instruction when Keyword is selected at triage time.</span>
       </div>
 
       <div class="field">
         <label for="duplicate_threshold">Duplicate threshold</label>
-        <input type="number" id="duplicate_threshold" name="duplicate_threshold" min="0" max="64" value="{{ values.duplicate_threshold }}">
+        <input type="number" id="duplicate_threshold" name="duplicate_threshold" data-default="{{ defaults.duplicate_threshold }}" min="0" max="64" value="{{ values.duplicate_threshold }}">
         <span class="hint">How similar two previews must be (out of 64) to count as near-duplicates when Detect duplicates is selected at triage time. Lower = stricter (fewer, more confident groupings); higher = looser (catches more, but risks grouping genuinely different shots). Default 5.</span>
       </div>
 
@@ -281,6 +298,32 @@
   </div>
 
   <script>
+    // "Reset to default": every field carries its code default in
+    // data-default. A link appears on any field that differs; resetting only
+    // fills the form - nothing is saved until Save is clicked.
+    (function () {
+      const fields = document.querySelectorAll('[data-default]');
+      function refresh(el) {
+        const wrap = el.closest('.field');
+        wrap.classList.toggle('customized', el.value.trim() !== el.dataset.default.trim());
+      }
+      fields.forEach(function (el) {
+        const label = el.closest('.field').querySelector('label');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'reset';
+        btn.textContent = 'Reset to default';
+        btn.addEventListener('click', function () { el.value = el.dataset.default; refresh(el); });
+        label.appendChild(btn);
+        el.addEventListener('input', function () { refresh(el); });
+        refresh(el);
+      });
+      document.getElementById('reset-all').addEventListener('click', function () {
+        if (!confirm('Fill every field with its default? Nothing is saved until you click Save.')) return;
+        fields.forEach(function (el) { el.value = el.dataset.default; refresh(el); });
+      });
+    })();
+
     let browserCurrentPath = null;
 
     function openBrowser() {

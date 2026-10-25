@@ -8,7 +8,7 @@ from collections import Counter
 from PIL import Image
 from flask import Flask, render_template, request, redirect, url_for, abort, send_file
 
-from config import load_settings, save_settings
+from config import get_defaults, load_settings, save_settings
 from dedupe import group_duplicates
 from metadata import (
     apply_orientation,
@@ -345,6 +345,14 @@ def settings_browse():
     }
 
 
+def settings_form_defaults():
+    """get_defaults() as the strings the settings form holds, so the page
+    can compare each field to its default and reset it."""
+    d = get_defaults()
+    d["raw_extensions"] = ", ".join(sorted(d["raw_extensions"]))
+    return {k: str(v) for k, v in d.items()}
+
+
 @app.route("/settings", methods=["GET", "POST"])
 def settings_page():
     if request.method == "POST":
@@ -399,7 +407,11 @@ def settings_page():
                 )
         except ValueError as e:
             return render_template(
-                "settings.html", values=form, error=str(e), saved=None
+                "settings.html",
+                values=form,
+                defaults=settings_form_defaults(),
+                error=str(e),
+                saved=None,
             )
 
         save_settings(new_settings)
@@ -419,7 +431,11 @@ def settings_page():
         "duplicate_threshold": current["duplicate_threshold"],
     }
     return render_template(
-        "settings.html", values=values, saved=request.args.get("saved"), error=None
+        "settings.html",
+        values=values,
+        defaults=settings_form_defaults(),
+        saved=request.args.get("saved"),
+        error=None,
     )
 
 

@@ -93,6 +93,12 @@ each install/machine keeps its own):
 | Shoot context, reject/rating/keyword criteria | — | genre-neutral defaults (Claude identifies each photo's subject/technique first) |
 | Duplicate threshold (Hamming distance, 0-64) | `DUPLICATE_THRESHOLD` | `5` |
 
+Saving the Settings page stores every field in `settings.json`, so later
+changes to the built-in defaults won't reach an install that has saved
+once. Each setting shows a **Reset to default** link when it differs from
+the default, and **Reset all to defaults** fills the whole form (nothing is
+saved until you click Save).
+
 `ANTHROPIC_API_KEY` is deliberately **not** on the Settings page — it's a
 secret, and the Settings page is reachable by anyone who can reach the
 app on your network. Set it as an environment variable only (see
