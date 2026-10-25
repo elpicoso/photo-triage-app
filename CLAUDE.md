@@ -311,11 +311,28 @@ sidecars. To actually load the new rating/keywords:
 - Back up the catalog first
 - Select the affected photos in the Library grid
 - Right-click → **Metadata → Read Metadata from File**
-- Confirm the overwrite warning ("Import Settings from Disk")
+- If it asks which side wins, "Import Settings from Disk" makes the
+  sidecar the truth - safe ONLY when the sidecar already carries the photo's
+  edits (see below)
 
 If keywords/ratings look correct in the XMP file via exiftool but don't
 show up in Lightroom after a sync, this is almost always the cause — check
 here before assuming the write step failed.
+
+**Workflow for photos that already have Lightroom edits (verified on
+2026-09-19, 5 edited photos, edits survived):** back up the folder's `.xmp`
+files; Lightroom "Save Metadata to File" (answer "Overwrite Settings" if
+asked - that writes catalog -> disk); run `tools/merge_lightroom_metadata.py
+<folder> <backup>` to merge the app's ratings/labels/captions/keywords back
+without overriding the user's own (Wade rates and color-labels some photos
+himself - e.g. 5-star ratings, Purple labels - and the first version of this
+script would have clobbered them); then "Read Metadata from File" -> "Import
+Settings from Disk". Lightroom's Save can land minutes after the command
+(background write over many files), so re-check which sidecars have
+`XMP-crs:Version` before merging. Run the script on the Mac against
+`/Volumes/<volume>/...` (fast local disk), not via the Pi's SMB mount.
+Wade's overriding rule: never lose his edits - back up the catalog first and
+test on one photo.
 
 **This step can wipe the photo's Lightroom edits.** Import Settings from
 Disk makes the sidecar the source of truth, develop settings included, and

@@ -174,6 +174,32 @@ with two camera bodies (say `.CR3` and `.CR2`) is handled in one pass.
    **one photo you've already edited** first and confirm its edits survive
    before running it on a whole folder.
 
+### Photos you've already edited in Lightroom
+
+Lightroom keeps edits in its catalog, and a sidecar the app creates contains
+no develop settings. If you run **Read Metadata from File** over photos that
+already have edits, Lightroom can treat the sidecar as the truth and lose
+them. Use this order instead (back up the catalog first, and try it on one
+photo):
+
+1. Copy the folder's `.xmp` files somewhere safe (a "before" backup).
+2. In Lightroom, select the photos and run **Metadata → Save Metadata to
+   File**. If it asks about metadata changed by another application, choose
+   **Overwrite Settings** (writes the catalog to disk). This puts your edits
+   into the sidecars - but also replaces the app's ratings/keywords with the
+   catalog's.
+3. Run `tools/merge_lightroom_metadata.py <folder> <backup-dir>` (dry run,
+   then `--apply`). It puts the app's ratings, red reject labels, captions
+   and keywords back **without overriding anything you set in Lightroom**
+   (your ratings, other color labels and captions win; keywords are merged),
+   and never touches develop settings.
+4. Now **Read Metadata from File**. If it asks, choose **Import Settings
+   from Disk** - the sidecars contain your edits, so nothing is reset.
+
+Photos with no edits can skip all of this. Turning on Lightroom's
+*Catalog Settings → Metadata → Automatically write changes into XMP* keeps
+sidecars carrying your edits from then on.
+
 Worth spot-checking one file's actual XMP output before trusting a big
 batch: `exiftool -G1 -a -s path/to/file.xmp`.
 
