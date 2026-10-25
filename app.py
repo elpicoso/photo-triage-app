@@ -3,6 +3,7 @@ import io
 import json
 import os
 import threading
+import uuid
 from collections import Counter
 
 from PIL import Image
@@ -114,17 +115,31 @@ def write_results_csv(folder, results):
     os.replace(tmp, path)
 
 
+# Identifies this server process. Background jobs are threads, so a restart
+# kills them mid-run and leaves their progress file claiming "running"
+# forever (blocking retry). Each progress file records the process that
+# wrote it; one from any other process belongs to a dead job.
+RUN_ID = uuid.uuid4().hex
+
+# folder -> progress for jobs running in THIS process, for /jobs.
+RUNNING = {}
+
+
 def write_progress(folder, stage, done, total, error=None):
     """Written by the background extract/triage thread, polled by /status.
     Written to a temp file then renamed so a concurrent GET never sees a
     half-written JSON file."""
-    data = {"stage": stage, "done": done, "total": total}
+    data = {"stage": stage, "done": done, "total": total, "run": RUN_ID}
     if error:
         data["error"] = error
+        RUNNING.pop(folder, None)
+    else:
+        RUNNING[folder] = {"stage": stage, "done": done, "total": total}
     write_json_atomic(progress_path(folder), data)
 
 
 def clear_progress(folder):
+    RUNNING.pop(folder, None)
     try:
         os.remove(progress_path(folder))
     except FileNotFoundError:
@@ -136,7 +151,15 @@ def read_progress(folder):
     if not os.path.exists(path):
         return None
     with open(path) as f:
-        return json.load(f)
+        progress = json.load(f)
+    if "error" not in progress and progress.get("run") != RUN_ID:
+        # Written by a previous server process - that job died with it.
+        progress = {
+            **progress,
+            "error": "Interrupted by a service restart - nothing more is running. "
+            "Photos already finished are kept; try again to do the rest.",
+        }
+    return progress
 
 
 def is_active(folder):
@@ -303,6 +326,13 @@ def browse(subpath=""):
         raw_root=load_settings()["raw_root"],
         api_key_configured=api_key_configured(),
     )
+
+
+@app.route("/jobs")
+def jobs():
+    """Background jobs running right now in this process - check this before
+    restarting the service, since a restart kills them mid-run."""
+    return {"running": RUNNING}
 
 
 @app.route("/status/<path:folder>")

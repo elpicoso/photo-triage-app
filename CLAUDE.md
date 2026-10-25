@@ -48,6 +48,12 @@ keywords into XMP sidecars for Lightroom Classic import.
 3. SSH to the Pi: `ssh wade@<pi-ip>`
 4. `cd /home/wade/photo-triage-app && git pull`
 5. `sudo systemctl restart photo-triage`
+   **Before the restart, check nothing is running:**
+   `curl -s http://<pi-ip>:5000/jobs` must show `{"running": {}}` - a
+   restart kills extract/triage/write threads mid-run (lost 71 of 118
+   photos' worth of a write once; the folder then sat "writing" forever).
+   Since then a progress file from a previous process shows as
+   "Interrupted by a service restart" with a retry, instead of hanging.
 6. `systemctl status photo-triage` — confirm the "Active since" timestamp is
    fresh before assuming the deploy worked.
 7. Sanity check with `sudo journalctl -u photo-triage -n 30 --no-pager` if
