@@ -101,7 +101,7 @@ def encode_image(path, max_dimension, orientation=1):
         return base64.standard_b64encode(buf.getvalue()).decode("utf-8")
 
 
-def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True):
+def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True, usage=None):
     settings = load_settings()
     content = []
     orientations = read_orientations(os.path.dirname(image_paths[0]))
@@ -147,6 +147,12 @@ def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True):
             max_tokens=2000,
             messages=[{"role": "user", "content": content}],
         )
+        if usage is not None:
+            # Every response is billed, including one whose JSON we then
+            # have to retry.
+            usage["requests"] = usage.get("requests", 0) + 1
+            usage["input_tokens"] = usage.get("input_tokens", 0) + response.usage.input_tokens
+            usage["output_tokens"] = usage.get("output_tokens", 0) + response.usage.output_tokens
         text = response.content[0].text.strip()
         text = text.replace("```json", "").replace("```", "").strip()
         try:
@@ -173,8 +179,12 @@ def triage_folder(
     duplicate_groups=None,
     progress_callback=None,
     only=None,
+    usage=None,
 ):
-    """only, if given, restricts the run to those preview filenames (the
+    """usage, if given, is a dict that accumulates the run's API usage
+    (requests, input_tokens, output_tokens).
+
+    only, if given, restricts the run to those preview filenames (the
     ones not already written - see app.pending_previews()), so re-running a
     folder doesn't re-triage photos that are done.
 
@@ -225,7 +235,13 @@ def triage_folder(
         batch = to_send[i : i + batch_size]
         try:
             results.extend(
-                triage_batch(batch, do_reject=do_reject, do_rating=do_rating, do_keywords=do_keywords)
+                triage_batch(
+                    batch,
+                    do_reject=do_reject,
+                    do_rating=do_rating,
+                    do_keywords=do_keywords,
+                    usage=usage,
+                )
             )
         except Exception as e:
             # Don't let one bad batch kill the whole run - flag the files

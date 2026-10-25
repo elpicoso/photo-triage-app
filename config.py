@@ -59,6 +59,39 @@ DEFAULT_KEYWORD_CRITERIA = (
     '(e.g. "Milky Way, granite boulders, long exposure" not "nature, sky")'
 )
 
+# USD per million tokens, (input, output), from Anthropic's published API
+# prices as of 2026-10-06. These are ESTIMATES used only for the cost shown in
+# the app - the Anthropic Console's Usage/Cost pages are the source of truth.
+# Update this table when prices change; a model not listed shows tokens only.
+# (Haiku 5.5's rate is for prompts up to 100K tokens; triage batches are far
+# smaller than that.)
+MODEL_PRICES = {
+    "claude-fable-5-1": (10.00, 50.00),
+    "claude-fable-5": (10.00, 50.00),
+    "claude-opus-5-5": (4.00, 20.00),
+    "claude-opus-5": (5.00, 25.00),
+    "claude-sonnet-5-5": (2.00, 10.00),
+    "claude-sonnet-5": (2.00, 10.00),
+    "claude-sonnet-4-6": (3.00, 15.00),
+    "claude-haiku-5-5": (0.10, 0.50),
+    "claude-haiku-4-5": (1.00, 5.00),
+}
+
+
+def estimate_cost(model, input_tokens, output_tokens):
+    """Estimated USD for a call, or None if the model's price isn't known.
+    Dated ids (claude-haiku-4-5-20251001) match their undated base."""
+    prices = MODEL_PRICES.get(model)
+    if prices is None:
+        for known in sorted(MODEL_PRICES, key=len, reverse=True):
+            if model.startswith(known + "-"):
+                prices = MODEL_PRICES[known]
+                break
+    if prices is None:
+        return None
+    return (input_tokens * prices[0] + output_tokens * prices[1]) / 1_000_000
+
+
 SETTINGS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")
 
 

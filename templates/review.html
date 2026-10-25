@@ -145,6 +145,10 @@
       <a class="back" href="{{ url_for('browse', subpath=folder.rsplit('/', 1)[0] if '/' in folder else '') }}">&larr; back</a>
     </header>
 
+    {% if usage %}
+      <div class="note" style="margin: 0 0 1rem 0;">{{ usage.last }}{% if usage.total %}<br>{{ usage.total }}{% endif %}</div>
+    {% endif %}
+
     {% if writing %}
       <div class="writing-banner">
         A write is already running for this folder ({{ writing.done }}/{{ writing.total }} sidecars).

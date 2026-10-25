@@ -176,6 +176,8 @@
   .folder-row.is-review .folder-status { color: var(--amber); border-color: var(--amber-dim); }
   .cleanup button { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 500; }
   .cleanup button:hover { color: var(--text); border-color: var(--amber-dim); background: transparent; }
+  .usage-note { color: var(--muted); font-size: 0.78rem; margin: 0.4rem 0 0.2rem; line-height: 1.5; }
+  .usage-fine { font-size: 0.7rem; opacity: 0.75; }
   .reprocess { margin-left: auto; }
   .reprocess button { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 500; }
   .reprocess button:hover { color: var(--text); border-color: var(--amber-dim); background: transparent; }
@@ -228,6 +230,10 @@
             {{ status }}
           </span>
         </div>
+        {% if usage %}
+          <div class="usage-note">{{ usage.last }}{% if usage.total %}<br>{{ usage.total }}{% endif %}
+            <br><span class="usage-fine">Estimate from token counts and list prices; the Anthropic Console shows the actual bill.</span></div>
+        {% endif %}
         <div class="actions" id="actions">
           {% if progress %}
             <div class="progress-wrap" id="progress-wrap">

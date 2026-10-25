@@ -97,6 +97,15 @@ or got removed) — do the manual steps above until/unless it's recreated.
   `triage.encode_image()` (what Claude sees) and `/preview` (review
   thumbnails). Without it, Claude rejected sideways portrait shots as
   "rotated 90 degrees". Run at extract and again at the start of triage.
+- Usage/cost: `triage_batch` adds each response's `usage` (input/output
+  tokens, and every retry - retries are billed) into a dict that
+  `triage_folder(usage=...)` passes through; the triage thread calls
+  `record_usage()` in a `finally` (tokens are spent even if the run then
+  fails) and appends to `_previews/.usage.json`, which Reprocess and Clean up
+  deliberately keep (it's spend history). `config.MODEL_PRICES` holds USD per
+  million tokens (input, output) with the date they were taken (2026-10-06,
+  from the claude-api skill's table) - an estimate, update when prices
+  change; Wade should check the Anthropic Console for the real bill.
 - `/cleanup/<folder>` ("Clean up previews" on a *written* folder's card)
   deletes only `*.jpg` directly in `_previews/` (not dotfiles, not
   subfolders, never RAWs/sidecars), refused unless the folder is fully

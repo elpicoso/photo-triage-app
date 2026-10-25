@@ -4,12 +4,13 @@ import json
 import os
 import threading
 import uuid
+from datetime import datetime
 from collections import Counter
 
 from PIL import Image
 from flask import Flask, render_template, request, redirect, url_for, abort, send_file
 
-from config import get_defaults, load_settings, save_settings
+from config import estimate_cost, get_defaults, load_settings, save_settings
 from dedupe import group_duplicates
 from metadata import (
     apply_orientation,
@@ -233,6 +234,57 @@ def pending_previews(folder):
     return preview_names(folder) - read_completed(folder)
 
 
+def usage_path(folder):
+    return os.path.join(preview_dir(folder), ".usage.json")
+
+
+def record_usage(folder, model, photos, usage):
+    """Append one triage run's API usage to the folder's history. Kept across
+    Reprocess and Clean up - it's a record of money already spent."""
+    if not usage.get("requests"):
+        return  # nothing was sent to the API (e.g. every photo was a duplicate)
+    runs = read_json_lenient(usage_path(folder), {}).get("runs", [])
+    runs.append(
+        {
+            "at": datetime.now().isoformat(timespec="seconds"),
+            "model": model,
+            "photos": photos,
+            "requests": usage["requests"],
+            "input_tokens": usage["input_tokens"],
+            "output_tokens": usage["output_tokens"],
+            "cost": estimate_cost(model, usage["input_tokens"], usage["output_tokens"]),
+        }
+    )
+    write_json_atomic(usage_path(folder), {"runs": runs})
+
+
+def _money(cost):
+    return "$%.2f" % cost if cost >= 0.01 else "<$0.01"
+
+
+def usage_summary(folder):
+    """Text for the folder card / review page: the last triage run and, when
+    there's been more than one, the folder's total. None if no usage recorded."""
+    runs = read_json_lenient(usage_path(folder), {}).get("runs", [])
+    if not runs:
+        return None
+    last = runs[-1]
+    cost = f"about {_money(last['cost'])}" if last.get("cost") is not None else "cost unknown for this model"
+    text = (
+        f"Last triage: {last['photos']} photo{'' if last['photos'] == 1 else 's'} \u00b7 {last['input_tokens']:,} tokens in / "
+        f"{last['output_tokens']:,} out \u00b7 {cost} ({last['model']})"
+    )
+    out = {"last": text, "total": None}
+    if len(runs) > 1:
+        known = [r["cost"] for r in runs if r.get("cost") is not None]
+        total_tokens = sum(r["input_tokens"] + r["output_tokens"] for r in runs)
+        total_cost = f"about {_money(sum(known))}" if known else "cost unknown"
+        if known and len(known) < len(runs):
+            total_cost += " (some runs unpriced)"
+        out["total"] = f"All {len(runs)} triage runs for this folder: {total_tokens:,} tokens \u00b7 {total_cost}"
+    return out
+
+
 def written_stems(folder):
     """Name stems of photos already written - they no longer need a preview,
     so a cleaned-up folder isn't asked to re-extract them."""
@@ -331,6 +383,7 @@ def browse(subpath=""):
         status=status,
         progress=progress,
         preview_count=preview_count,
+        usage=usage_summary(subpath) if is_shoot else None,
         cleaned=request.args.get("cleaned"),
         unextracted_count=len(unextracted),
         unextracted_summary=unextracted_summary,
@@ -551,17 +604,27 @@ def triage(folder):
                 # page doesn't show groups that no longer apply.
                 os.remove(duplicates_path(folder))
 
-            results = triage_folder(
-                preview_dir(folder),
-                do_reject=do_reject,
-                do_rating=do_rating,
-                do_keywords=do_keywords,
-                duplicate_groups=duplicate_groups,
-                only=pending,
-                progress_callback=lambda done, total: write_progress(
-                    folder, "triaging", done, total
-                ),
-            )
+            usage = {}
+            model = load_settings()["triage_model"]
+            try:
+                results = triage_folder(
+                    preview_dir(folder),
+                    do_reject=do_reject,
+                    do_rating=do_rating,
+                    do_keywords=do_keywords,
+                    duplicate_groups=duplicate_groups,
+                    only=pending,
+                    progress_callback=lambda done, total: write_progress(
+                        folder, "triaging", done, total
+                    ),
+                    usage=usage,
+                )
+            finally:
+                # Tokens are spent even if the run then fails - record them.
+                try:
+                    record_usage(folder, model, len(pending), usage)
+                except Exception as e:
+                    print(f"WARNING: couldn't record usage for {folder}: {e}")
 
             # Everything that can fail stays inside this try: an exception
             # escaping the thread would leave the progress file behind
@@ -668,7 +731,12 @@ def review(folder):
     writing = progress if is_active(folder) and progress["stage"] == "writing" else None
 
     return render_template(
-        "review.html", folder=folder, rows=rows, ops=ops, writing=writing
+        "review.html",
+        folder=folder,
+        rows=rows,
+        ops=ops,
+        writing=writing,
+        usage=usage_summary(folder),
     )
 
 

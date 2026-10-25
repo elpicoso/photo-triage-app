@@ -312,6 +312,13 @@ sudo journalctl -u photo-triage -n 30 --no-pager
 - **Cost**: vision API calls add up over a large backlog — check current
   pricing at anthropic.com and consider testing on one small batch before
   running the full backlog.
+- **Usage and cost:** each triage run's API token counts are recorded in
+  the folder (`_previews/.usage.json`) and shown on the folder card and the
+  review page, with an estimated dollar cost and a running total when a
+  folder has been triaged more than once. The dollars are an *estimate*:
+  tokens x the per-model list prices in `MODEL_PRICES` in `config.py`
+  (update that table when prices change; an unlisted model shows tokens
+  only). The Anthropic Console's Usage and Cost pages are the real bill.
 - **Disk space:** the extracted preview JPEGs are kept after processing (the
   review thumbnails and re-runs use them) and take roughly 0.5-1 MB per
   photo. Once a folder is fully written, its card offers **Clean up
