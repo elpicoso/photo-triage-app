@@ -97,6 +97,14 @@ or got removed) — do the manual steps above until/unless it's recreated.
   `triage.encode_image()` (what Claude sees) and `/preview` (review
   thumbnails). Without it, Claude rejected sideways portrait shots as
   "rotated 90 degrees". Run at extract and again at the start of triage.
+- `/cleanup/<folder>` ("Clean up previews" on a *written* folder's card)
+  deletes only `*.jpg` directly in `_previews/` (not dotfiles, not
+  subfolders, never RAWs/sidecars), refused unless the folder is fully
+  written and idle. State files stay, so `get_status()` still returns
+  "written" (empty previews + non-empty ledger = written); `written_stems()`
+  is passed as `skip` to `missing_previews()`/`extract_previews()` so a
+  cleaned folder's "Extract the rest" counts only genuinely new RAWs.
+  Previews are otherwise never deleted by the app (~0.5 MB/photo).
 - `/reset/<folder>` ("Reprocess folder" on the card) deletes the CSV, ops,
   duplicates, `.completed.json` and `.written` so a folder returns to
   "extracted" and runs triage/review/write over every photo again. Previews

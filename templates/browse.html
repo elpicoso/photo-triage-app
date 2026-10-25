@@ -174,6 +174,8 @@
   .folder-row.is-written { border-left: 3px solid #5a9a5a; }
   .folder-row.is-written .folder-status { color: #7fc27f; border-color: #3d6b3d; }
   .folder-row.is-review .folder-status { color: var(--amber); border-color: var(--amber-dim); }
+  .cleanup button { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 500; }
+  .cleanup button:hover { color: var(--text); border-color: var(--amber-dim); background: transparent; }
   .reprocess { margin-left: auto; }
   .reprocess button { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 500; }
   .reprocess button:hover { color: var(--text); border-color: var(--amber-dim); background: transparent; }
@@ -210,6 +212,13 @@
         {% endif %}
       {% endfor %}
     </div>
+
+    {% if cleaned %}
+      {% set parts = cleaned.split(':') %}
+      <div class="banner saved" style="background: rgba(217,143,43,0.1); border: 1px solid var(--amber-dim); color: var(--amber); padding: 0.6rem 0.9rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.85rem;">
+        Cleaned up {{ parts[0] }} previews (about {{ parts[1] }} MB freed). Your RAW files and sidecars were not touched.
+      </div>
+    {% endif %}
 
     {% if is_shoot %}
       <div class="shoot-card">
@@ -268,11 +277,19 @@
             <a class="btn" href="{{ url_for('review', folder=subpath) }}">Review results</a>
           {% elif status == 'written' %}
             <span class="ready-note">Ready for Lightroom import</span>
+            {% if preview_count %}
+              <form class="cleanup" action="{{ url_for('cleanup', folder=subpath) }}" method="post"
+                    onsubmit="return confirm('Delete the {{ preview_count }} extracted preview JPEGs for this folder?\n\nOnly the preview images in _previews are removed, to free disk space. Your RAW files and XMP sidecars are not touched, and the folder stays marked as written. Reprocessing it later will re-extract them.');">
+                <button type="submit">Clean up previews ({{ preview_count }} files)</button>
+              </form>
+            {% else %}
+              <span class="ready-note">Previews cleaned up</span>
+            {% endif %}
           {% endif %}
         </div>
         {% if status != 'not started' and not (progress and not progress.error) %}
           <form class="reprocess" action="{{ url_for('reset', folder=subpath) }}" method="post"
-                onsubmit="return confirm('Reprocess this folder?\n\nThis clears its triage results and the record of which photos were written, so every photo goes through triage, review and write again. Writing again replaces the XMP sidecars - including any change made to those photos in Lightroom since. Extracted previews and existing sidecars are kept until you write.');">
+                onsubmit="return confirm('Reprocess this folder?\n\nThis clears its triage results and the record of which photos were written, so every photo goes through triage, review and write again. Writing again replaces the XMP sidecars - including any change made to those photos in Lightroom since. Extracted previews and existing sidecars are kept until you write (if you had cleaned up the previews, they are extracted again).');">
             <button type="submit">Reprocess folder</button>
           </form>
         {% endif %}

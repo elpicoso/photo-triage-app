@@ -233,10 +233,17 @@ def pending_previews(folder):
     return preview_names(folder) - read_completed(folder)
 
 
+def written_stems(folder):
+    """Name stems of photos already written - they no longer need a preview,
+    so a cleaned-up folder isn't asked to re-extract them."""
+    return {os.path.splitext(n)[0] for n in read_completed(folder)}
+
+
 def get_status(folder):
     previews = preview_names(folder)
     if not previews:
-        return "not started"
+        # Previews cleaned up after writing: the ledger still says it's done.
+        return "written" if read_completed(folder) else "not started"
     pending = previews - read_completed(folder)
     if not pending:
         return "written"
@@ -299,6 +306,7 @@ def browse(subpath=""):
     is_shoot = bool(subpath) and is_shoot_folder(current_dir)
     status = get_status(subpath) if is_shoot else None
     progress = read_progress(subpath) if is_shoot else None
+    preview_count = len(preview_names(subpath)) if is_shoot else 0
 
     # RAW files that have no preview yet (a new camera body's files, or
     # photos copied in after the first extract) - offered as "extract the
@@ -306,7 +314,8 @@ def browse(subpath=""):
     unextracted = []
     if is_shoot and status != "not started":
         unextracted = missing_previews(
-            current_dir, preview_dir(subpath), raw_extensions()
+            current_dir, preview_dir(subpath), raw_extensions(),
+            skip=written_stems(subpath),
         )
     unextracted_summary = ", ".join(
         f"{n} {ext.upper()}"
@@ -321,6 +330,8 @@ def browse(subpath=""):
         is_shoot=is_shoot,
         status=status,
         progress=progress,
+        preview_count=preview_count,
+        cleaned=request.args.get("cleaned"),
         unextracted_count=len(unextracted),
         unextracted_summary=unextracted_summary,
         raw_root=load_settings()["raw_root"],
@@ -480,7 +491,8 @@ def extract(folder):
         abort(400, "No RAW files found in this folder")
 
     os.makedirs(preview_dir(folder), exist_ok=True)
-    todo = missing_previews(raw_dir, preview_dir(folder), extensions)
+    skip = written_stems(folder)
+    todo = missing_previews(raw_dir, preview_dir(folder), extensions, skip=skip)
     write_progress(folder, "extracting", 0, len(todo))
 
     def run():
@@ -492,6 +504,7 @@ def extract(folder):
                 progress_callback=lambda done, total: write_progress(
                     folder, "extracting", done, total
                 ),
+                skip=skip,
             )
         except Exception as e:
             write_progress(folder, "extracting", 0, 0, error=str(e))
@@ -575,6 +588,33 @@ def triage(folder):
 
     threading.Thread(target=run, daemon=True).start()
     return redirect(url_for("browse", subpath=folder))
+
+
+@app.route("/cleanup/<path:folder>", methods=["POST"])
+def cleanup(folder):
+    """Delete a finished folder's extracted preview JPEGs to free disk space.
+    Only allowed once every photo has been written (nothing left that needs
+    them), never while a job runs, and only touches the previews themselves:
+    the results CSV, the written-photos ledger and the other state files stay,
+    so the folder keeps showing as written. RAW files and sidecars are never
+    touched (this only looks inside _previews/)."""
+    if is_active(folder) or get_status(folder) != "written":
+        abort(400, "Previews can only be cleaned up once the folder is fully written")
+    pdir = preview_dir(folder)
+    removed = freed = 0
+    with os.scandir(pdir) as entries:
+        for entry in entries:
+            if (
+                entry.name.lower().endswith(".jpg")
+                and not entry.name.startswith(".")
+                and entry.is_file(follow_symlinks=False)
+            ):
+                freed += entry.stat().st_size
+                os.remove(entry.path)
+                removed += 1
+    return redirect(
+        url_for("browse", subpath=folder, cleaned=f"{removed}:{round(freed / 1e6)}")
+    )
 
 
 @app.route("/reset/<path:folder>", methods=["POST"])

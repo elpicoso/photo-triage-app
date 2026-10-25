@@ -120,10 +120,17 @@ def _preview_ok(preview_dir, stem):
     return os.path.isfile(path) and os.path.getsize(path) > 0
 
 
-def missing_previews(raw_dir, preview_dir, raw_extensions):
-    """RAW filenames that don't have a (non-empty) preview yet."""
+def missing_previews(raw_dir, preview_dir, raw_extensions, skip=None):
+    """RAW filenames that don't have a (non-empty) preview yet. `skip` is a
+    set of name stems to leave out - photos already written, whose previews
+    may have been cleaned up on purpose."""
     by_stem, _ = raw_files_by_stem(raw_dir, raw_extensions)
-    return [f for stem, f in sorted(by_stem.items()) if not _preview_ok(preview_dir, stem)]
+    skip = skip or ()
+    return [
+        f
+        for stem, f in sorted(by_stem.items())
+        if stem not in skip and not _preview_ok(preview_dir, stem)
+    ]
 
 
 def find_preview_tag(sample_raw_path):
@@ -138,7 +145,7 @@ def find_preview_tag(sample_raw_path):
     return "-PreviewImage"
 
 
-def extract_previews(raw_dir, preview_dir, raw_extensions, progress_callback=None):
+def extract_previews(raw_dir, preview_dir, raw_extensions, progress_callback=None, skip=None):
     """Extracts the embedded JPEG preview from every RAW file in raw_dir that
     doesn't have one yet, so re-running a folder only does the new files.
     Returns how many previews were created.
@@ -153,7 +160,12 @@ def extract_previews(raw_dir, preview_dir, raw_extensions, progress_callback=Non
     for f in skipped:
         print(f"WARNING: skipping {f}: another RAW file with the same name already claims its preview/sidecar")
 
-    todo = [(stem, f) for stem, f in sorted(by_stem.items()) if not _preview_ok(preview_dir, stem)]
+    skip = skip or ()
+    todo = [
+        (stem, f)
+        for stem, f in sorted(by_stem.items())
+        if stem not in skip and not _preview_ok(preview_dir, stem)
+    ]
     total = len(todo)
     if not todo:
         if progress_callback:

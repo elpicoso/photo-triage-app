@@ -312,6 +312,13 @@ sudo journalctl -u photo-triage -n 30 --no-pager
 - **Cost**: vision API calls add up over a large backlog — check current
   pricing at anthropic.com and consider testing on one small batch before
   running the full backlog.
+- **Disk space:** the extracted preview JPEGs are kept after processing (the
+  review thumbnails and re-runs use them) and take roughly 0.5-1 MB per
+  photo. Once a folder is fully written, its card offers **Clean up
+  previews**, which deletes only those JPEGs - the results, the
+  written-photos record, your RAW files and your sidecars stay, and the
+  folder still shows as written. New RAW files added later extract as
+  normal; **Reprocess folder** re-extracts if you ever need to redo it.
 - Generated files (`_previews/`, `triage_results.csv`, `.progress.json`,
   `.completed.json`) live inside each shoot folder under `_previews/` —
   safe to delete a shoot's `_previews/` folder to reset its status back to
