@@ -292,6 +292,14 @@ field it's still being asked to fill in.
   `triage_batch` keeps only `RESULT_FIELDS` and retries a batch once on
   malformed JSON. If a folder is ever stuck "running" with no job, delete
   its `_previews/.progress.json` (and check `triage_results.csv`).
+- Previews whose RAW is no longer in the folder (moved into a subfolder that
+  is processed on its own - Wade did this to 2026-09-18: `Rejected/`,
+  `Capuchin Crypt/`) are ignored by `preview_names()`. Before that, the
+  parent still counted all 190 previews: triage would have paid to evaluate
+  135 photos whose RAWs had moved, and the folder could never reach
+  "written" (nothing to write a sidecar to). Sidecars left behind at the old
+  level are harmless orphans (Lightroom pairs a sidecar with the RAW beside
+  it).
 - `dedupe.sharpness_score()`'s representative pick is a best-effort proxy,
   not a reliable judgment — verified during testing that it correctly
   ranks sharp > blurry within a same-exposure burst, but a synthetic

@@ -219,14 +219,21 @@ def migrate_legacy_ledger(folder):
 
 
 def preview_names(folder):
+    """Preview filenames for photos that are actually in this folder.
+    Previews whose RAW has since been moved or deleted (say into a subfolder
+    that is processed on its own) are ignored - otherwise triage would pay to
+    evaluate them and the folder could never reach "written", since there is
+    no RAW left to write a sidecar for."""
     try:
-        return {
+        names = {
             f
             for f in os.listdir(preview_dir(folder))
             if f.lower().endswith(".jpg") and not f.startswith(".")
         }
     except FileNotFoundError:
         return set()
+    by_stem, _ = raw_files_by_stem(safe_path(folder), raw_extensions())
+    return {n for n in names if os.path.splitext(n)[0] in by_stem}
 
 
 def pending_previews(folder):
