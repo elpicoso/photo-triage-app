@@ -88,6 +88,32 @@ def read_json_lenient(path, default):
         return default
 
 
+RESULT_COLUMNS = [
+    "filename",
+    "subject",
+    "reject",
+    "reject_reason",
+    "rating",
+    "gallery",
+    "keywords",
+    "duplicate_of",
+]
+
+
+def write_results_csv(folder, results):
+    """Write triage_results.csv via a temp file + rename, so a failure part
+    way through never leaves a truncated results file that review would
+    then show as if it were the whole folder. Fields outside the known
+    columns are ignored rather than fatal."""
+    path = csv_path(folder)
+    tmp = path + ".tmp"
+    with open(tmp, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=RESULT_COLUMNS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(results)
+    os.replace(tmp, path)
+
+
 def write_progress(folder, stage, done, total, error=None):
     """Written by the background extract/triage thread, polled by /status.
     Written to a temp file then renamed so a concurrent GET never sees a
@@ -477,38 +503,27 @@ def triage(folder):
                     folder, "triaging", done, total
                 ),
             )
+
+            # Everything that can fail stays inside this try: an exception
+            # escaping the thread would leave the progress file behind
+            # claiming the job is still running, which blocks any retry.
+            write_results_csv(folder, results)
+
+            # Remember what was selected so the review step can default its
+            # own write-time checkboxes to match (with the option to
+            # override there).
+            write_json_atomic(
+                ops_path(folder),
+                {
+                    "reject": do_reject,
+                    "rating": do_rating,
+                    "keywords": do_keywords,
+                    "duplicates": do_duplicates,
+                },
+            )
         except Exception as e:
             write_progress(folder, "triaging", 0, 0, error=str(e))
             return
-
-        with open(csv_path(folder), "w", newline="") as f:
-            writer = csv.DictWriter(
-                f,
-                fieldnames=[
-                    "filename",
-                    "subject",
-                    "reject",
-                    "reject_reason",
-                    "rating",
-                    "gallery",
-                    "keywords",
-                    "duplicate_of",
-                ],
-            )
-            writer.writeheader()
-            writer.writerows(results)
-
-        # Remember what was selected so the review step can default its own
-        # write-time checkboxes to match (with the option to override there).
-        write_json_atomic(
-            ops_path(folder),
-            {
-                "reject": do_reject,
-                "rating": do_rating,
-                "keywords": do_keywords,
-                "duplicates": do_duplicates,
-            },
-        )
 
         clear_progress(folder)
 

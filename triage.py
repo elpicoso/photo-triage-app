@@ -11,6 +11,9 @@ from metadata import apply_orientation, read_orientations
 
 client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from environment
 
+# The per-photo fields triage returns and the results CSV stores.
+RESULT_FIELDS = ("filename", "subject", "reject", "reject_reason", "rating", "gallery", "keywords")
+
 
 def build_prompt(
     n,
@@ -76,6 +79,8 @@ For each image, decide:
 {chr(10).join(instructions)}
 
 Respond with ONLY a JSON array, no other text, no markdown formatting.
+Use exactly these fields and no others, and never use double quote
+characters inside a text value (use single quotes or rephrase).
 Format: [{{"filename": "...", {", ".join(fields)}}}]
 
 Filenames in order shown:
@@ -133,25 +138,30 @@ def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True):
         }
     )
 
-    response = client.messages.create(
-        model=settings["triage_model"],
-        max_tokens=2000,
-        messages=[{"role": "user", "content": content}],
-    )
-    text = response.content[0].text.strip()
-    text = text.replace("```json", "").replace("```", "").strip()
-    parsed = json.loads(text)
+    # A stronger model occasionally returns malformed JSON (an unescaped
+    # quote inside a value) - the same request almost always parses on a
+    # second try, so retry once before giving up on the batch.
+    for attempt in (1, 2):
+        response = client.messages.create(
+            model=settings["triage_model"],
+            max_tokens=2000,
+            messages=[{"role": "user", "content": content}],
+        )
+        text = response.content[0].text.strip()
+        text = text.replace("```json", "").replace("```", "").strip()
+        try:
+            parsed = json.loads(text)
+            break
+        except ValueError:
+            if attempt == 2:
+                raise
 
-    # Normalize so the CSV always has all three columns, even if a
-    # given operation was skipped for this run.
-    for row in parsed:
-        row.setdefault("subject", "")
-        row.setdefault("reject", "")
-        row.setdefault("reject_reason", "")
-        row.setdefault("rating", "")
-        row.setdefault("gallery", "")
-        row.setdefault("keywords", "")
-    return parsed
+    # Keep only the fields we store (a model may add extras like a
+    # "gallery_note") and normalize so every row has every column, even if
+    # a given operation was skipped for this run.
+    return [
+        {field: row.get(field, "") for field in RESULT_FIELDS} for row in parsed
+    ]
 
 
 def triage_folder(

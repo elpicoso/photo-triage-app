@@ -250,6 +250,16 @@ field it's still being asked to fill in.
   apart either); the more common extension wins and the other is skipped
   with a warning in the journal. AppleDouble `._*` stubs from the SMB
   share are ignored.
+- A background job whose thread dies leaves `.progress.json` behind saying
+  "running", so the folder looks busy forever and can't be retried or
+  reset (`is_active()`). Found when Sonnet 5.5 returned an extra
+  `gallery_note` field and `csv.DictWriter` raised outside the try block
+  (the CSV was also left half-written). Now: results are written via
+  `write_results_csv()` (temp file + rename, unknown fields ignored) inside
+  the job's try so any failure becomes a visible error with a retry button;
+  `triage_batch` keeps only `RESULT_FIELDS` and retries a batch once on
+  malformed JSON. If a folder is ever stuck "running" with no job, delete
+  its `_previews/.progress.json` (and check `triage_results.csv`).
 - `dedupe.sharpness_score()`'s representative pick is a best-effort proxy,
   not a reliable judgment — verified during testing that it correctly
   ranks sharp > blurry within a same-exposure burst, but a synthetic
