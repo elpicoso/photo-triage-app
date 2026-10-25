@@ -105,9 +105,13 @@ or got removed) — do the manual steps above until/unless it's recreated.
   that write; Lightroom's Keywords panel reads `XMP-dc:Subject` anyway).
 - Rating/gallery: the default rating criteria score technical quality AND
   interestingness (documentary/record shots capped at 3; most photos 2-3, 4
-  sparingly, 5 rarely), judging what a photo could become with a reasonable
-  edit but not flaws editing can't fix. With Rate checked, triage also
-  returns `gallery` = yes / with edits / no (CSV column, editable on the
+  sparingly, 5 rarely) without penalizing edit-fixable problems. With Rate
+  checked, triage also returns `gallery` = yes / with edits / no, a
+  SEPARATE judgment held to a high bar (~5% yes, <10% with edits). It was
+  first tied to the rating ("4 = clear path to gallery with edits") and the
+  trial on 2026-09-19 showed the two moved in lockstep (all 4s were "with
+  edits", all 5s "yes"; 38% of photos tagged) - redundant and not a usable
+  shortlist - so the rating no longer mentions edit potential (CSV column, editable on the
   review page); `/write` merges it into the keywords as `gallery-candidate`
   / `gallery-with-edits` (`with_gallery_keyword()` in app.py, follows the
   Keywords checkbox). The default reject criteria were softened to match:

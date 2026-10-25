@@ -123,8 +123,9 @@ with two camera bodies (say `.CR3` and `.CR2`) is handled in one pass.
    are grouped locally first (free, no API call) and only the sharpest
    frame per group is sent to Claude — the rest are pre-flagged as
    rejects.
-   When Rate is checked, Claude also says whether each photo is gallery
-   material: **yes** (as shot), **with edits** (strong subject/light that a
+   When Rate is checked, Claude also makes a separate, stricter call on
+   whether each photo is gallery material (independent of the star
+   rating): **yes** (as shot), **with edits** (strong subject/light that a
    reasonable edit would carry), or **no** (generic or documentary). On
    write, that becomes the keyword `gallery-candidate` or
    `gallery-with-edits`, so you can filter or build a Smart Collection in
