@@ -156,7 +156,9 @@ def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True, 
         text = response.content[0].text.strip()
         text = text.replace("```json", "").replace("```", "").strip()
         try:
-            parsed = json.loads(text)
+            # strict=False: a raw newline/tab inside a string value is
+            # harmless here but fails strict parsing (and the retry too).
+            parsed = json.loads(text, strict=False)
             break
         except ValueError:
             if attempt == 2:
@@ -165,9 +167,30 @@ def triage_batch(image_paths, do_reject=True, do_rating=True, do_keywords=True, 
     # Keep only the fields we store (a model may add extras like a
     # "gallery_note") and normalize so every row has every column, even if
     # a given operation was skipped for this run.
-    return [
-        {field: row.get(field, "") for field in RESULT_FIELDS} for row in parsed
-    ]
+    #
+    # Match results to the batch by filename and give every photo in it a
+    # row: if the response skips or renames one, the CSV would miss that
+    # preview, the folder would never reach "needs review", and the page
+    # would offer "Run triage" again instead of Review.
+    by_name = {
+        row.get("filename"): row
+        for row in parsed
+        if isinstance(row, dict)
+    }
+    rows = []
+    for name in filenames:
+        row = by_name.get(name)
+        if row is None:
+            rows.append(
+                {
+                    **{field: "" for field in RESULT_FIELDS},
+                    "filename": name,
+                    "keywords": "ERROR: no result returned for this photo",
+                }
+            )
+        else:
+            rows.append({field: row.get(field, "") for field in RESULT_FIELDS})
+    return rows
 
 
 def triage_folder(

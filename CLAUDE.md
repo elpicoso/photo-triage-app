@@ -290,7 +290,12 @@ field it's still being asked to fill in.
   `write_results_csv()` (temp file + rename, unknown fields ignored) inside
   the job's try so any failure becomes a visible error with a retry button;
   `triage_batch` keeps only `RESULT_FIELDS` and retries a batch once on
-  malformed JSON. If a folder is ever stuck "running" with no job, delete
+  malformed JSON. It parses with `strict=False` (a raw newline/tab inside a
+  string value failed both tries for 8 photos of 2026-09-24: "Invalid
+  control character") and builds its rows from the batch's own filenames: a
+  photo Claude skips or renames gets an `ERROR: no result returned` row. A
+  CSV missing a preview keeps the folder out of "needs review" (the page
+  offers "Run triage" again instead of Review). If a folder is ever stuck "running" with no job, delete
   its `_previews/.progress.json` (and check `triage_results.csv`).
 - Previews whose RAW is no longer in the folder (moved into a subfolder that
   is processed on its own - Wade did this to 2026-09-18: `Rejected/`,
