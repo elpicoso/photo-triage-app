@@ -1,9 +1,11 @@
 import json
 import os
+import struct
 import subprocess
 import tempfile
 import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 
 from PIL import Image
 
@@ -81,11 +83,119 @@ def read_orientations(preview_dir):
         return {}
 
 
+# Canon's uuid box inside a CR3's moov; it holds CNCV, CCTP, CTBO and the CMT1
+# box, which is a small TIFF (IFD0 = camera make/model/Orientation...).
+_CANON_UUID = bytes.fromhex("85c0b687820f11e08111f4ce462b6a48")
+
+
+def _tiff_orientation(read):
+    """Orientation from the first IFD of a TIFF, given read(offset, n) -> bytes
+    over that TIFF. None if it isn't a plain TIFF or has no Orientation."""
+    head = read(0, 8)
+    if len(head) < 8 or head[:2] not in (b"II", b"MM"):
+        return None
+    e = "<" if head[:2] == b"II" else ">"
+    if struct.unpack(e + "H", head[2:4])[0] != 42:  # 43 = BigTIFF: leave to exiftool
+        return None
+    ifd = struct.unpack(e + "I", head[4:8])[0]
+    count = read(ifd, 2)
+    if len(count) < 2:
+        return None
+    n = struct.unpack(e + "H", count)[0]
+    if not 0 < n <= 512:
+        return None
+    entries = read(ifd + 2, n * 12)
+    if len(entries) < n * 12:
+        return None
+    for i in range(n):
+        tag, typ, cnt = struct.unpack(e + "HHI", entries[i * 12 : i * 12 + 8])
+        if tag == 0x0112:
+            if typ != 3 or cnt != 1:
+                return None
+            value = struct.unpack(e + "H", entries[i * 12 + 8 : i * 12 + 10])[0]
+            return value if 1 <= value <= 8 else None
+    return None
+
+
+def _iter_boxes(buf):
+    """(type, payload) for each ISO-BMFF box in buf."""
+    pos = 0
+    while pos + 8 <= len(buf):
+        n, kind = struct.unpack(">I4s", buf[pos : pos + 8])
+        hdr = 8
+        if n == 1:
+            if pos + 16 > len(buf):
+                return
+            n, hdr = struct.unpack(">Q", buf[pos + 8 : pos + 16])[0], 16
+        elif n == 0:
+            n = len(buf) - pos
+        if n < hdr:
+            return
+        yield kind, buf[pos + hdr : pos + n]
+        pos += n
+
+
+def _cr3_orientation(f, size):
+    """A CR3 keeps its metadata in a small moov box right after ftyp, ahead of
+    the ~30 MB of image data, so walk the top-level boxes by seeking and read
+    only moov (~30 KB)."""
+    pos = 0
+    for _ in range(16):
+        if pos + 8 > size:
+            return None
+        f.seek(pos)
+        head = f.read(16)
+        if len(head) < 8:
+            return None
+        n, kind = struct.unpack(">I4s", head[:8])
+        hdr = 8
+        if n == 1 and len(head) == 16:
+            n, hdr = struct.unpack(">Q", head[8:16])[0], 16
+        elif n == 0:
+            n = size - pos
+        if n < hdr:
+            return None
+        if kind == b"moov":
+            if n > 4 * 1024 * 1024:
+                return None
+            f.seek(pos + hdr)
+            moov = f.read(n - hdr)
+            for k, payload in _iter_boxes(moov):
+                if k == b"uuid" and payload[:16] == _CANON_UUID:
+                    for k2, tiff in _iter_boxes(payload[16:]):
+                        if k2 == b"CMT1":
+                            return _tiff_orientation(lambda off, cnt: tiff[off : off + cnt])
+            return None
+        pos += n
+    return None
+
+
+def read_orientation_fast(path):
+    """Orientation (1-8) read straight from the file's header, or None if the
+    format isn't one this understands (callers fall back to exiftool). On a
+    network share exiftool reads ~27 MB of every 40 MB CR3 for this one value
+    (about 0.9 s a photo); this reads a few KB."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(12)
+            if head[4:8] == b"ftyp":
+                return _cr3_orientation(f, os.fstat(f.fileno()).st_size)
+
+            def read(off, cnt):
+                f.seek(off)
+                return f.read(cnt)
+
+            return _tiff_orientation(read)  # CR2, DNG and other plain TIFFs
+    except (OSError, struct.error, ValueError):
+        return None
+
+
 def ensure_orientations(raw_dir, preview_dir, raw_extensions):
-    """Reads Orientation from each RAW (headers only, one exiftool call) for
-    any previewed photo not yet recorded, and saves it to
-    _previews/.orientation.json so triage and the review thumbnails can show
-    each preview the right way up."""
+    """Reads Orientation from each RAW for any previewed photo not yet
+    recorded, and saves it to _previews/.orientation.json so triage and the
+    review thumbnails can show each preview the right way up. Reads the header
+    directly (see read_orientation_fast); a file it can't parse goes to one
+    batched exiftool call instead."""
     by_stem, _ = raw_files_by_stem(raw_dir, raw_extensions)
     known = read_orientations(preview_dir)
     todo = [
@@ -95,18 +205,28 @@ def ensure_orientations(raw_dir, preview_dir, raw_extensions):
     ]
     if not todo:
         return known
-    with tempfile.NamedTemporaryFile("w", suffix=".args", delete=False) as argfile:
-        argfile.write("\n".join(todo) + "\n")
-    try:
-        out = subprocess.run(
-            ["exiftool", "-j", "-n", "-Orientation", "-@", argfile.name],
-            capture_output=True, text=True,
-        ).stdout
-    finally:
-        os.unlink(argfile.name)
-    for row in json.loads(out) if out.strip() else []:
-        stem = os.path.splitext(os.path.basename(row["SourceFile"]))[0]
-        known[stem] = int(row.get("Orientation") or 1)
+    # Small reads, so a few at once hide the share's round-trip latency.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        fast = list(pool.map(read_orientation_fast, todo))
+    slow = []
+    for path, value in zip(todo, fast):
+        if value is None:
+            slow.append(path)
+        else:
+            known[os.path.splitext(os.path.basename(path))[0]] = value
+    if slow:
+        with tempfile.NamedTemporaryFile("w", suffix=".args", delete=False) as argfile:
+            argfile.write("\n".join(slow) + "\n")
+        try:
+            out = subprocess.run(
+                ["exiftool", "-j", "-n", "-Orientation", "-@", argfile.name],
+                capture_output=True, text=True,
+            ).stdout
+        finally:
+            os.unlink(argfile.name)
+        for row in json.loads(out) if out.strip() else []:
+            stem = os.path.splitext(os.path.basename(row["SourceFile"]))[0]
+            known[stem] = int(row.get("Orientation") or 1)
     path = os.path.join(preview_dir, ORIENTATION_FILE)
     tmp = path + ".tmp"
     with open(tmp, "w") as f:

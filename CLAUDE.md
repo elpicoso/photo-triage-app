@@ -97,11 +97,21 @@ or got removed) — do the manual steps above until/unless it's recreated.
   `triage.encode_image()` (what Claude sees) and `/preview` (review
   thumbnails). Without it, Claude rejected sideways portrait shots as
   "rotated 90 degrees". Run at extract and again at the start of triage.
-  It is a separate pass over the RAWs and slow over SMB (09-26: 479 files
-  took over 10 minutes after the previews were done), so `/extract` runs it
-  as its own progress stage, `orienting`, with its own label. When it ran
+  `/extract` runs it as its own progress stage, `orienting`: when it ran
   inside `extract_previews` the bar sat at 100% and the page never refreshed
-  because the job was still going.
+  because the job was still going. It used to be one `exiftool -Orientation`
+  call, which reads ~27 MB of every 40 MB CR3 even with `-fast2` and took
+  7 minutes for 479 files over SMB (0.9 s/photo, bandwidth-bound: 4 parallel
+  exiftools only got 1.4x). `metadata.read_orientation_fast()` now reads the
+  value from the header directly - CR3: the 28 KB `moov` box right after
+  `ftyp` -> Canon `uuid` -> `CMT1` (a small TIFF); CR2/DNG: IFD0 of the TIFF -
+  a few KB per file, 479 photos in ~20 s (4 threads), and identical to
+  exiftool's value for all 1,547 photos already processed. Anything it can't
+  parse (BigTIFF, other makers, a changed layout) returns None and goes to the
+  old batched exiftool call, so a new format just runs slow, not wrong.
+  Preview extraction itself still uses exiftool and reads whole files (~1 s a
+  photo); a direct reader for the CR3 `PRVW` box would speed that up the
+  same way.
 - Usage/cost: `triage_batch` adds each response's `usage` (input/output
   tokens, and every retry - retries are billed) into a dict that
   `triage_folder(usage=...)` passes through; the triage thread calls

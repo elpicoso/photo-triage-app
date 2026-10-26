@@ -259,7 +259,7 @@
                 {% endif %}
               {% else %}
                 <div class="progress-label">
-                  <span>{{ {'extracting': 'Extracting previews', 'orienting': 'Reading photo orientations (a few minutes for a big folder)', 'writing': 'Writing XMP sidecars'}.get(progress.stage, 'Running triage') }}</span>
+                  <span>{{ {'extracting': 'Extracting previews', 'orienting': 'Reading photo orientations', 'writing': 'Writing XMP sidecars'}.get(progress.stage, 'Running triage') }}</span>
                   <span>{% if progress.stage != 'orienting' %}{{ progress.done }}/{{ progress.total }}{% endif %}</span>
                 </div>
                 <div class="progress-bar">
@@ -347,7 +347,7 @@
           const title = document.querySelector('#progress-wrap .progress-label span:first-child');
           const label = document.querySelector('#progress-wrap .progress-label span:last-child');
           const fill = document.querySelector('#progress-wrap .progress-fill');
-          if (title && orienting) title.textContent = 'Reading photo orientations (a few minutes for a big folder)';
+          if (title && orienting) title.textContent = 'Reading photo orientations';
           if (label) label.textContent = orienting ? '' : data.done + '/' + data.total;
           if (fill) {
             fill.classList.toggle('indeterminate', orienting);
