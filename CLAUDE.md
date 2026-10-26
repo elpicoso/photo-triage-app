@@ -115,7 +115,10 @@ or got removed) — do the manual steps above until/unless it's recreated.
   box in the Canon `uuid` eaf42b5e... box before `mdat` (~0.4 MB); CR2: the
   JPEG strip of IFD0 (tags 0x111/0x117, ~1.3 MB) - and writes
   `<stem>.jpg` via a `.tmp` + rename. It is byte-identical to exiftool's
-  output for all 1,355 Canon previews on disk when it was written. It is
+  output for all 1,355 Canon previews on disk when it was written, and on
+  the Pi 80 previews took 2.9 s (36 ms each, vs ~900 ms; that test wrote to
+  local disk - on the real run each ~0.4 MB preview is also written back
+  over SMB). It is
   **Canon CR3/CR2 only on purpose**: in other makers' TIFF-based RAWs
   (NEF, ARW, ORF, DNG...) IFD0 is a small thumbnail, not what exiftool's
   `PreviewImage` returns, so a generic reader would silently feed Claude
