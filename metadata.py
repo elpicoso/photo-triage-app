@@ -88,9 +88,10 @@ def read_orientations(preview_dir):
 _CANON_UUID = bytes.fromhex("85c0b687820f11e08111f4ce462b6a48")
 
 
-def _tiff_orientation(read):
-    """Orientation from the first IFD of a TIFF, given read(offset, n) -> bytes
-    over that TIFF. None if it isn't a plain TIFF or has no Orientation."""
+def _tiff_ifd0(read):
+    """(byte order, {tag: (type, count, 4-byte value field)}) for the first IFD
+    of a TIFF, given read(offset, n) -> bytes over that TIFF. None if it isn't
+    a plain TIFF."""
     head = read(0, 8)
     if len(head) < 8 or head[:2] not in (b"II", b"MM"):
         return None
@@ -107,14 +108,32 @@ def _tiff_orientation(read):
     entries = read(ifd + 2, n * 12)
     if len(entries) < n * 12:
         return None
+    tags = {}
     for i in range(n):
         tag, typ, cnt = struct.unpack(e + "HHI", entries[i * 12 : i * 12 + 8])
-        if tag == 0x0112:
-            if typ != 3 or cnt != 1:
-                return None
-            value = struct.unpack(e + "H", entries[i * 12 + 8 : i * 12 + 10])[0]
-            return value if 1 <= value <= 8 else None
-    return None
+        tags[tag] = (typ, cnt, entries[i * 12 + 8 : i * 12 + 12])
+    return e, tags
+
+
+def _tiff_int(e, entry):
+    """The value of a single SHORT or LONG IFD entry, else None."""
+    if entry is None:
+        return None
+    typ, cnt, field = entry
+    if cnt != 1 or typ not in (3, 4):
+        return None
+    return struct.unpack(e + "H", field[:2])[0] if typ == 3 else struct.unpack(e + "I", field)[0]
+
+
+def _tiff_orientation(read):
+    """Orientation from the first IFD of a TIFF, given read(offset, n) -> bytes
+    over that TIFF. None if it isn't a plain TIFF or has no Orientation."""
+    ifd0 = _tiff_ifd0(read)
+    if ifd0 is None:
+        return None
+    e, tags = ifd0
+    value = _tiff_int(e, tags.get(0x0112))
+    return value if value is not None and 1 <= value <= 8 else None
 
 
 def _iter_boxes(buf):
@@ -253,6 +272,126 @@ def missing_previews(raw_dir, preview_dir, raw_extensions, skip=None):
     ]
 
 
+# The uuid box in a CR3 that holds its PRVW preview.
+_PRVW_UUID = bytes.fromhex("eaf42b5e1c984b88b9fbb7dc406e4d16")
+
+
+def _is_jpeg(data):
+    return len(data) > 1000 and data[:2] == b"\xff\xd8" and data[-2:] == b"\xff\xd9"
+
+
+def _cr3_preview(f, size):
+    """The PRVW JPEG of a CR3: it sits in a ~0.4 MB uuid box before the image
+    data, so walk the top-level boxes by seeking and read only that one.
+    None unless the box is laid out exactly as expected."""
+    pos = 0
+    for _ in range(16):
+        if pos + 24 > size:
+            return None
+        f.seek(pos)
+        head = f.read(32)
+        n, kind = struct.unpack(">I4s", head[:8])
+        hdr = 8
+        if n == 1:
+            n, hdr = struct.unpack(">Q", head[8:16])[0], 16
+        elif n == 0:
+            n = size - pos
+        if n < hdr or kind == b"mdat":
+            return None
+        if kind == b"uuid" and n >= hdr + 16 and head[hdr : hdr + 16] == _PRVW_UUID:
+            if n > 32 * 1024 * 1024:
+                return None
+            f.seek(pos + hdr + 16)
+            body = f.read(n - hdr - 16)
+            i = body.find(b"PRVW", 0, 64)  # box: size, "PRVW", 16 bytes of fields, JPEG
+            if i < 4 or len(body) < i + 20:
+                return None
+            box = struct.unpack(">I", body[i - 4 : i])[0]
+            jlen = struct.unpack(">I", body[i + 16 : i + 20])[0]
+            jpeg = body[i + 20 : i + 20 + jlen]
+            if box != jlen + 24 or len(jpeg) != jlen or not _is_jpeg(jpeg):
+                return None
+            return jpeg
+        pos += n
+    return None
+
+
+def _cr2_preview(f):
+    """The preview of a CR2 is the JPEG strip in its first IFD."""
+
+    def read(off, cnt):
+        f.seek(off)
+        return f.read(cnt)
+
+    ifd0 = _tiff_ifd0(read)
+    if ifd0 is None:
+        return None
+    e, tags = ifd0
+    if _tiff_int(e, tags.get(0x0103)) != 6:  # Compression: JPEG
+        return None
+    off, length = _tiff_int(e, tags.get(0x0111)), _tiff_int(e, tags.get(0x0117))
+    if not off or not length or length > 64 * 1024 * 1024:
+        return None
+    jpeg = read(off, length)
+    return jpeg if len(jpeg) == length and _is_jpeg(jpeg) else None
+
+
+def read_preview_fast(path):
+    """The embedded preview JPEG of a Canon CR3 or CR2, read directly from the
+    file, or None for anything else (or anything unexpected) - callers fall
+    back to exiftool, which gives the identical bytes. Deliberately Canon-only:
+    in other makers' TIFF-based RAWs the first IFD holds a small thumbnail,
+    not the preview exiftool's PreviewImage returns, so a generic reader would
+    silently hand back the wrong image. exiftool reads the whole of every file
+    for this (~1 s a photo over SMB); this reads 0.4-1.4 MB."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(12)
+            if head[4:12] == b"ftypcrx ":
+                return _cr3_preview(f, os.fstat(f.fileno()).st_size)
+            if head[:4] == b"II*\x00" and head[8:10] == b"CR":
+                return _cr2_preview(f)
+            return None
+    except (OSError, struct.error, ValueError):
+        return None
+
+
+def _extract_previews_fast(raw_dir, preview_dir, todo, progress_callback):
+    """Write previews for the (stem, filename) pairs in todo that
+    read_preview_fast understands; returns how many. The rest are left for
+    exiftool. A few threads at once hide the share's round-trip latency."""
+    total = len(todo)
+
+    def work(item):
+        stem, f = item
+        data = read_preview_fast(os.path.join(raw_dir, f))
+        if data is None:
+            return False
+        final = os.path.join(preview_dir, stem + ".jpg")
+        tmp = final + ".tmp"  # never seen as a preview; renamed in one step
+        try:
+            with open(tmp, "wb") as out:
+                out.write(data)
+            os.replace(tmp, final)
+        except OSError:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            return False
+        return True
+
+    done, last = 0, 0.0
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        for ok in pool.map(work, todo):
+            done += ok
+            now = time.monotonic()
+            if progress_callback and now - last > 0.3:
+                progress_callback(done, total)
+                last = now
+    return done
+
+
 def find_preview_tag(sample_raw_path):
     """Most cameras use PreviewImage; some Nikon/Sony bodies use JpgFromRaw.
     Check the actual file rather than assuming."""
@@ -270,11 +409,12 @@ def extract_previews(raw_dir, preview_dir, raw_extensions, progress_callback=Non
     doesn't have one yet, so re-running a folder only does the new files.
     Returns how many previews were created.
 
-    exiftool runs once per RAW extension (different bodies can need a
-    different preview tag, so each is probed separately), batched over an
-    explicit file list. progress_callback(done, total), if given, is polled
-    every ~0.5s while exiftool runs - the only outside signal of progress is
-    previews landing in preview_dir."""
+    Canon CR3/CR2 previews are read straight out of the file
+    (read_preview_fast). Whatever that can't handle goes to exiftool, which
+    runs once per RAW extension (different bodies can need a different
+    preview tag, so each is probed separately), batched over an explicit file
+    list. progress_callback(done, total), if given, is called as previews land
+    in preview_dir (polled every ~0.5s while exiftool runs)."""
     os.makedirs(preview_dir, exist_ok=True)
     by_stem, skipped = raw_files_by_stem(raw_dir, raw_extensions)
     for f in skipped:
@@ -303,9 +443,12 @@ def extract_previews(raw_dir, preview_dir, raw_extensions, progress_callback=Non
         present = set(os.listdir(preview_dir))
         return sum(1 for stem, _ in todo if stem + ".jpg" in present)
 
+    _extract_previews_fast(raw_dir, preview_dir, todo, progress_callback)
+
     groups = {}
     for stem, f in todo:
-        groups.setdefault(_ext(f), []).append(f)
+        if not _preview_ok(preview_dir, stem):
+            groups.setdefault(_ext(f), []).append(f)
 
     for ext, files in groups.items():
         tag = find_preview_tag(os.path.join(raw_dir, files[0]))

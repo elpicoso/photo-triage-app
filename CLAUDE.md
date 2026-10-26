@@ -109,9 +109,20 @@ or got removed) — do the manual steps above until/unless it's recreated.
   exiftool's value for all 1,547 photos already processed. Anything it can't
   parse (BigTIFF, other makers, a changed layout) returns None and goes to the
   old batched exiftool call, so a new format just runs slow, not wrong.
-  Preview extraction itself still uses exiftool and reads whole files (~1 s a
-  photo); a direct reader for the CR3 `PRVW` box would speed that up the
-  same way.
+  Preview extraction works the same way: exiftool `-b -PreviewImage` also
+  reads whole files (~1 s a photo over SMB; 479 photos took 8 minutes), so
+  `metadata.read_preview_fast()` reads the JPEG directly - CR3: the `PRVW`
+  box in the Canon `uuid` eaf42b5e... box before `mdat` (~0.4 MB); CR2: the
+  JPEG strip of IFD0 (tags 0x111/0x117, ~1.3 MB) - and writes
+  `<stem>.jpg` via a `.tmp` + rename. It is byte-identical to exiftool's
+  output for all 1,355 Canon previews on disk when it was written. It is
+  **Canon CR3/CR2 only on purpose**: in other makers' TIFF-based RAWs
+  (NEF, ARW, ORF, DNG...) IFD0 is a small thumbnail, not what exiftool's
+  `PreviewImage` returns, so a generic reader would silently feed Claude
+  thumbnails. Those, and any CR3/CR2 whose layout isn't exactly as expected,
+  go through the old batched exiftool call (`find_preview_tag` per
+  extension). Check any change here by byte-comparing against existing
+  `_previews/*.jpg`.
 - Usage/cost: `triage_batch` adds each response's `usage` (input/output
   tokens, and every retry - retries are billed) into a dict that
   `triage_folder(usage=...)` passes through; the triage thread calls
