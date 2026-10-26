@@ -211,8 +211,6 @@ def extract_previews(raw_dir, preview_dir, raw_extensions, progress_callback=Non
     if progress_callback:
         progress_callback(total, total)
 
-    ensure_orientations(raw_dir, preview_dir, raw_extensions)
-
     missing = [f for stem, f in todo if not _preview_ok(preview_dir, stem)]
     for f in missing:
         print(f"WARNING: no embedded preview could be extracted from {f}")

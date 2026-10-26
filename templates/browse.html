@@ -112,6 +112,8 @@
     height: 100%;
     transition: width 0.4s ease;
   }
+  .progress-fill.indeterminate { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.35; } }
   .progress-error {
     color: var(--red);
     font-size: 0.8rem;
@@ -257,11 +259,11 @@
                 {% endif %}
               {% else %}
                 <div class="progress-label">
-                  <span>{{ {'extracting': 'Extracting previews', 'writing': 'Writing XMP sidecars'}.get(progress.stage, 'Running triage') }}</span>
-                  <span>{{ progress.done }}/{{ progress.total }}</span>
+                  <span>{{ {'extracting': 'Extracting previews', 'orienting': 'Reading photo orientations (a few minutes for a big folder)', 'writing': 'Writing XMP sidecars'}.get(progress.stage, 'Running triage') }}</span>
+                  <span>{% if progress.stage != 'orienting' %}{{ progress.done }}/{{ progress.total }}{% endif %}</span>
                 </div>
                 <div class="progress-bar">
-                  <div class="progress-fill" style="width: {{ (progress.done / progress.total * 100) if progress.total else 0 }}%"></div>
+                  <div class="progress-fill{{ ' indeterminate' if progress.stage == 'orienting' }}" style="width: {{ 100 if progress.stage == 'orienting' else ((progress.done / progress.total * 100) if progress.total else 0) }}%"></div>
                 </div>
               {% endif %}
             </div>
@@ -341,10 +343,16 @@
             window.location.reload();
             return;
           }
+          const orienting = data.stage === 'orienting';
+          const title = document.querySelector('#progress-wrap .progress-label span:first-child');
           const label = document.querySelector('#progress-wrap .progress-label span:last-child');
           const fill = document.querySelector('#progress-wrap .progress-fill');
-          if (label) label.textContent = data.done + '/' + data.total;
-          if (fill) fill.style.width = (data.total ? (data.done / data.total * 100) : 0) + '%';
+          if (title && orienting) title.textContent = 'Reading photo orientations (a few minutes for a big folder)';
+          if (label) label.textContent = orienting ? '' : data.done + '/' + data.total;
+          if (fill) {
+            fill.classList.toggle('indeterminate', orienting);
+            fill.style.width = (orienting ? 100 : (data.total ? (data.done / data.total * 100) : 0)) + '%';
+          }
           setTimeout(poll, 1500);
         })
         .catch(() => setTimeout(poll, 3000));

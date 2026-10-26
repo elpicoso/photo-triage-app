@@ -566,6 +566,12 @@ def extract(folder):
                 ),
                 skip=skip,
             )
+            # A second, separate pass over the RAWs (one exiftool run, slow
+            # over SMB - minutes for ~500 files). It used to run inside
+            # extract_previews after the bar hit 100%, so the page looked
+            # finished but never refreshed.
+            write_progress(folder, "orienting", 0, 0)
+            ensure_orientations(raw_dir, preview_dir(folder), extensions)
         except Exception as e:
             write_progress(folder, "extracting", 0, 0, error=str(e))
             return

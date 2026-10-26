@@ -97,6 +97,11 @@ or got removed) — do the manual steps above until/unless it's recreated.
   `triage.encode_image()` (what Claude sees) and `/preview` (review
   thumbnails). Without it, Claude rejected sideways portrait shots as
   "rotated 90 degrees". Run at extract and again at the start of triage.
+  It is a separate pass over the RAWs and slow over SMB (09-26: 479 files
+  took over 10 minutes after the previews were done), so `/extract` runs it
+  as its own progress stage, `orienting`, with its own label. When it ran
+  inside `extract_previews` the bar sat at 100% and the page never refreshed
+  because the job was still going.
 - Usage/cost: `triage_batch` adds each response's `usage` (input/output
   tokens, and every retry - retries are billed) into a dict that
   `triage_folder(usage=...)` passes through; the triage thread calls
